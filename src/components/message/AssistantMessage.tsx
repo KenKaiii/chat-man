@@ -1,5 +1,5 @@
 /**
- * Agent Girl - Modern chat interface for Claude Agent SDK
+ * Chat Man - Modern chat interface for Claude Agent SDK
  * Copyright (C) 2025 KenKai
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -22,7 +22,7 @@ import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { SyntaxHighlighter, vscDarkPlus } from '../../utils/syntaxHighlighter';
-import { AssistantMessage as AssistantMessageType, ToolUseBlock, TextBlock, TodoItem } from './types';
+import { AssistantMessage as AssistantMessageType, ToolUseBlock, TextBlock, ThinkingBlock as ThinkingBlockType, TodoItem } from './types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { CodeBlockWithCopy } from './CodeBlockWithCopy';
 import { URLBadge } from './URLBadge';
@@ -1632,11 +1632,11 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
             <img
               src="/client/agent-boy.svg"
               className="message-assistant-avatar"
-              alt="Agent Girl"
+              alt="Chat Man"
             />
             <div className="message-assistant-name-container">
               <span className="message-assistant-name">
-                {message.metadata?.model || 'Agent Girl'}
+                {message.metadata?.model || 'Chat Man'}
               </span>
               <span className="message-assistant-timestamp invisible group-hover:visible">
                 {formatTimestamp(message.timestamp)}
@@ -1649,11 +1649,17 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
             <div className="space-y-4 mt-2">
               {message.content.map((block, index) => {
                 if (block.type === 'text') {
-                  return <TextComponent key={index} text={block} />;
+                  // Use text length in key to force re-render when text changes
+                  const textBlock = block as TextBlock;
+                  return <TextComponent key={`${message.id}-text-${index}-${textBlock.text.length}`} text={block} />;
                 } else if (block.type === 'tool_use') {
-                  return <ToolUseComponent key={index} toolUse={block} />;
+                  // Use tool's own ID for stable key
+                  const toolBlock = block as ToolUseBlock;
+                  return <ToolUseComponent key={toolBlock.id} toolUse={block} />;
                 } else if (block.type === 'thinking') {
-                  return <ThinkingBlock key={index} title="Agent Girl's thoughts..." content={block.thinking} />;
+                  // Use thinking length in key to force re-render when thinking changes
+                  const thinkingBlock = block as ThinkingBlockType;
+                  return <ThinkingBlock key={`${message.id}-thinking-${index}-${thinkingBlock.thinking.length}`} title="Chat Man's thoughts..." content={block.thinking} />;
                 }
                 return null;
               })}
