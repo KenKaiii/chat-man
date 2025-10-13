@@ -1,5 +1,5 @@
 /**
- * Agent Girl - Modern chat interface for Claude Agent SDK
+ * Chat Man - Modern chat interface for Claude Agent SDK
  * Copyright (C) 2025 KenKai
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -41,7 +41,6 @@ interface NewChatWelcomeProps {
 const CAPABILITIES = [
   "100% private - GDPR & HIPAA compliant by design",
   "I analyze your documents with RAG - no data leaves your machine",
-  "I help with coding, debugging, and technical writing",
   "I process sensitive data safely - medical, financial, legal",
   "I work offline - no internet required after setup",
   "Unlimited queries - no API costs, no rate limits",

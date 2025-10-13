@@ -17,6 +17,10 @@ export default defineConfig({
         ws: true,
       },
     },
+    watch: {
+      // Ignore data directory to prevent HMR reload when RAG files change
+      ignored: ['**/data/**', '**/node_modules/**', '**/.git/**'],
+    },
   },
   css: {
     postcss: './postcss.config.js',
