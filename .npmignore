@@ -1,0 +1,45 @@
+# Source files
+src/
+*.tsx
+*.ts
+!dist/**/*.d.ts
+
+# Build configuration
+vite.config.ts
+tsconfig.json
+tailwind.config.js
+postcss.config.js
+build-css.ts
+
+# Development files
+.vscode/
+.idea/
+*.log
+*.swp
+.DS_Store
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Git
+.git/
+.gitignore
+
+# Node modules
+node_modules/
+
+# Documentation (keep only what's needed)
+CLAUDE.md
+OAUTH.md
+
+# Assets
+src/agent-boy.svg
+public/
+client/
+
+# Other
+.env
+.env.*
