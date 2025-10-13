@@ -67,7 +67,7 @@ async function installOllama(): Promise<boolean> {
       await $`brew install ollama`;
       log('✅ Ollama installed successfully!', colors.green);
       return true;
-    } catch (error) {
+    } catch (_error) {
       log('❌ Failed to install via Homebrew', colors.red);
       log(`Please install manually from: ${OLLAMA_DOWNLOAD_URL}`, colors.yellow);
       return false;
@@ -78,7 +78,7 @@ async function installOllama(): Promise<boolean> {
       await $`curl -fsSL https://ollama.ai/install.sh | sh`;
       log('✅ Ollama installed successfully!', colors.green);
       return true;
-    } catch (error) {
+    } catch (_error) {
       log('❌ Failed to install Ollama', colors.red);
       log(`Please install manually from: ${OLLAMA_DOWNLOAD_URL}`, colors.yellow);
       return false;
@@ -105,7 +105,7 @@ async function startOllama(): Promise<boolean> {
     }
 
     // Start Ollama in background
-    const proc = Bun.spawn(['ollama', 'serve'], {
+    Bun.spawn(['ollama', 'serve'], {
       stdout: 'ignore',
       stderr: 'ignore',
     });
@@ -124,7 +124,7 @@ async function startOllama(): Promise<boolean> {
     log('⚠️  Ollama may not have started correctly', colors.yellow);
     log('You can start it manually with: ollama serve', colors.yellow);
     return false;
-  } catch (error) {
+  } catch (_error) {
     log('⚠️  Could not start Ollama automatically', colors.yellow);
     log('Please run in a separate terminal: ollama serve', colors.yellow);
     return false;
@@ -139,8 +139,12 @@ async function checkModelExists(modelName: string): Promise<boolean> {
     const response = await fetch('http://localhost:11434/api/tags');
     if (!response.ok) return false;
 
-    const data = await response.json();
-    return data.models.some((m: any) => m.name.includes(modelName));
+    interface ModelData {
+      models: Array<{ name: string }>;
+    }
+
+    const data = await response.json() as ModelData;
+    return data.models.some((m) => m.name.includes(modelName));
   } catch {
     return false;
   }
@@ -164,7 +168,7 @@ async function pullModel(modelName: string): Promise<boolean> {
     await $`ollama pull ${modelName}`;
     log(`✅ Model ${modelName} downloaded successfully!`, colors.green);
     return true;
-  } catch (error) {
+  } catch (_error) {
     log(`❌ Failed to download model: ${modelName}`, colors.red);
     return false;
   }

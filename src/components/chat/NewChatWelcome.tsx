@@ -53,7 +53,6 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<FileAttachment[]>([]);
-  const [_isDraggingOver, setIsDraggingOver] = useState(false);
 
   // Mode selection state
   const [selectedMode, setSelectedMode] = useState<'general' | 'rag' | 'spark' | 'voice'>('general');
@@ -249,7 +248,6 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingOver(true);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -260,13 +258,11 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingOver(false);
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingOver(false);
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;

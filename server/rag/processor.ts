@@ -53,15 +53,24 @@ export async function processDocument(
   };
 }
 
+interface PDFParseResult {
+  text: string;
+  numpages: number;
+}
+
+interface PDFParseModule {
+  default: (buffer: Buffer) => Promise<PDFParseResult>;
+}
+
 async function processPDF(filePath: string): Promise<string> {
   const dataBuffer = await readFile(filePath);
-  const data = await (pdfParse as any).default(dataBuffer);
+  const data = await (pdfParse as unknown as PDFParseModule).default(dataBuffer);
   return data.text;
 }
 
 async function getPDFPageCount(filePath: string): Promise<number> {
   const dataBuffer = await readFile(filePath);
-  const data = await (pdfParse as any).default(dataBuffer);
+  const data = await (pdfParse as unknown as PDFParseModule).default(dataBuffer);
   return data.numpages;
 }
 

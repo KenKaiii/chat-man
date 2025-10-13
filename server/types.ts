@@ -11,8 +11,9 @@ export interface WebSocketMessage {
 
 export interface ChatMessage extends WebSocketMessage {
   type: 'chat';
-  content: string | Array<{ type: string; text?: string; [key: string]: any }>;
+  content: string | Array<{ type: string; text?: string; [key: string]: unknown }>;
   model?: string;
+  mode?: 'general' | 'rag' | 'spark' | 'voice';
 }
 
 export interface StopGenerationMessage extends WebSocketMessage {

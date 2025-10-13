@@ -21,6 +21,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Send, Plus, X, Square } from 'lucide-react';
 import type { FileAttachment } from '../message/types';
+import { ModeIndicator } from './ModeIndicator';
 
 interface ChatInputProps {
   value: string;
@@ -30,6 +31,7 @@ interface ChatInputProps {
   disabled?: boolean;
   isGenerating?: boolean;
   placeholder?: string;
+  mode?: 'general' | 'rag' | 'spark' | 'voice';
 }
 
 export function ChatInput({
@@ -39,12 +41,14 @@ export function ChatInput({
   onStop,
   disabled,
   isGenerating,
-  placeholder = 'Send a message'
+  placeholder = 'Send a message',
+  mode = 'general'
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<FileAttachment[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [modeIndicatorWidth, setModeIndicatorWidth] = useState(0);
 
   // Auto-focus on mount
   useEffect(() => {
@@ -277,6 +281,11 @@ export function ChatInput({
 
             {/* Textarea */}
             <div className="overflow-hidden relative px-2.5">
+              {/* Mode Indicator */}
+              <div className="relative">
+                <ModeIndicator mode={mode} onWidthChange={setModeIndicatorWidth} />
+              </div>
+
               <textarea
                 ref={textareaRef}
                 id="chat-input"
@@ -295,6 +304,7 @@ export function ChatInput({
                   caretColor: 'rgb(243, 244, 246)',
                   position: 'relative',
                   zIndex: 20,
+                  paddingLeft: `${modeIndicatorWidth}px`,
                 }}
               />
             </div>

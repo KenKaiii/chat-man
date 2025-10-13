@@ -1,5 +1,5 @@
 /**
- * Agent Girl - Modern chat interface for Claude Agent SDK
+ * Chat Man - Modern chat interface for Claude Agent SDK
  * Copyright (C) 2025 KenKai
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -104,19 +104,23 @@ export function MessageList({ messages, isLoading, liveTokenCount = 0 }: Message
     };
   }, [liveTokenCount]);
 
-  // Virtual scrolling setup
+  // Virtual scrolling setup with increased overscan during streaming
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 200, // Estimated message height - will auto-adjust
-    overscan: 5, // Render 5 extra items above/below viewport
+    overscan: isLoading ? 50 : 5, // Much larger overscan during streaming to prevent disappearing messages
   });
 
   // Scroll to bottom when messages change (for new messages)
   useEffect(() => {
     if (parentRef.current) {
-      // Auto-scroll to bottom on new messages
-      parentRef.current.scrollTop = parentRef.current.scrollHeight;
+      // Use requestAnimationFrame to let virtualizer measure first, then scroll
+      requestAnimationFrame(() => {
+        if (parentRef.current) {
+          parentRef.current.scrollTop = parentRef.current.scrollHeight;
+        }
+      });
     }
   }, [messages]);
 
@@ -124,7 +128,7 @@ export function MessageList({ messages, isLoading, liveTokenCount = 0 }: Message
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="empty-state">
-          <h2 className="empty-state-title">Welcome to Agent Girl Chat</h2>
+          <h2 className="empty-state-title">Welcome to Chat Man Chat</h2>
           <p className="empty-state-description">
             Start a conversation with Claude. I can help you with coding, analysis, and complex tasks
             using the Agent SDK tools.

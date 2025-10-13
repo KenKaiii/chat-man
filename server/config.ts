@@ -36,13 +36,24 @@ export interface Settings {
 }
 
 /**
- * Load system prompt from file
+ * Load system prompt from file (mode-specific or fallback to generic)
  */
-export async function loadSystemPrompt(): Promise<string> {
+export async function loadSystemPrompt(mode?: 'general' | 'rag' | 'spark' | 'voice'): Promise<string> {
+  // Try mode-specific prompt first
+  if (mode) {
+    try {
+      const modePath = join(CONFIG_DIR, `system-prompt-${mode}.txt`);
+      return await readFile(modePath, 'utf-8');
+    } catch (_error) {
+      console.warn(`⚠️  Could not load system-prompt-${mode}.txt, trying generic`);
+    }
+  }
+
+  // Fall back to generic system-prompt.txt
   try {
     const path = join(CONFIG_DIR, 'system-prompt.txt');
     return await readFile(path, 'utf-8');
-  } catch (error) {
+  } catch (_error) {
     console.warn('⚠️  Could not load system-prompt.txt, using default');
     return 'You are a helpful AI assistant.';
   }
@@ -55,7 +66,7 @@ export async function loadKnowledge(): Promise<string> {
   try {
     const path = join(CONFIG_DIR, 'knowledge.md');
     return await readFile(path, 'utf-8');
-  } catch (error) {
+  } catch (_error) {
     console.warn('⚠️  Could not load knowledge.md, skipping');
     return '';
   }
@@ -69,7 +80,7 @@ export async function loadSettings(): Promise<Settings> {
     const path = join(CONFIG_DIR, 'settings.json');
     const content = await readFile(path, 'utf-8');
     return JSON.parse(content);
-  } catch (error) {
+  } catch (_error) {
     console.warn('⚠️  Could not load settings.json, using defaults');
     return {
       model: {
@@ -97,13 +108,13 @@ export async function loadSettings(): Promise<Settings> {
 /**
  * Build complete system context (system prompt + knowledge)
  */
-export async function buildSystemContext(): Promise<string> {
+export async function buildSystemContext(mode?: 'general' | 'rag' | 'spark' | 'voice'): Promise<string> {
   const settings = await loadSettings();
   const parts: string[] = [];
 
-  // Add system prompt if enabled
+  // Add system prompt if enabled (mode-specific)
   if (settings.system.enableSystemPrompt) {
-    const systemPrompt = await loadSystemPrompt();
+    const systemPrompt = await loadSystemPrompt(mode);
     if (systemPrompt) {
       parts.push(systemPrompt);
     }

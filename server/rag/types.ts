@@ -2,7 +2,7 @@
  * RAG TypeScript type definitions
  */
 
-export interface VectorDocument extends Record<string, any> {
+export interface VectorDocument {
   id: string;
   vector: number[];
   text: string;
@@ -14,6 +14,7 @@ export interface VectorDocument extends Record<string, any> {
     section?: string;
     timestamp: number;
   };
+  [key: string]: unknown;
 }
 
 export interface ChunkOptions {
@@ -47,11 +48,16 @@ export interface EmbeddingResponse {
 export interface RetrievalOptions {
   topK: number;
   documentId?: string;
+  sessionId?: string;
   minScore?: number;
 }
 
+export interface ChunkWithDistance extends VectorDocument {
+  _distance: number;
+}
+
 export interface RetrievalResult {
-  chunks: VectorDocument[];
+  chunks: ChunkWithDistance[];
   context: string;
   sources: Array<{
     documentId: string;

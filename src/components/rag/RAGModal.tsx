@@ -8,6 +8,7 @@ interface Document {
   id: string;
   chunkCount: number;
   totalTokens: number;
+  documentName?: string;
 }
 
 interface RAGModalProps {
@@ -27,12 +28,28 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
   // Load documents on mount
   useEffect(() => {
     if (isOpen) {
-      loadDocuments();
+      loadDocuments(true); // Show loading spinner on initial load
     }
   }, [isOpen]);
 
-  const loadDocuments = async () => {
-    setLoading(true);
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, onClose]);
+
+  const loadDocuments = async (showLoading: boolean = false) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       const response = await fetch('/api/rag/documents');
       const data = await response.json();
@@ -42,37 +59,32 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
     } catch (error) {
       console.error('Failed to load documents:', error);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   const handleFileSelect = async (file: File) => {
     setUploading(true);
-    console.log('Starting upload for:', file.name);
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      console.log('Sending request to /api/rag/upload');
       const response = await fetch('/api/rag/upload', {
         method: 'POST',
         body: formData,
       });
 
-      console.log('Response status:', response.status);
       const data = await response.json();
-      console.log('Response data:', data);
 
       if (response.ok) {
-        console.log('Upload successful, reloading documents');
         await loadDocuments();
         setCurrentPage(1);
       } else {
-        console.error('Upload failed with response:', data);
         alert(`Upload failed: ${data.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Upload failed with error:', error);
       alert(`Upload failed: ${error instanceof Error ? error.message : 'Network error'}`);
     } finally {
       setUploading(false);
@@ -85,14 +97,18 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleFileSelect(file);
+    if (file) {
+      handleFileSelect(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFileSelect(file);
+    if (file) {
+      handleFileSelect(file);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -123,11 +139,32 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
     }
   };
 
+  // Truncate filename to 30 characters
+  const truncateFilename = (filename: string, maxLength: number = 30): string => {
+    if (filename.length <= maxLength) return filename;
+
+    // Try to keep file extension
+    const lastDotIndex = filename.lastIndexOf('.');
+    if (lastDotIndex > 0 && filename.length - lastDotIndex <= 5) {
+      const extension = filename.substring(lastDotIndex);
+      const nameWithoutExt = filename.substring(0, lastDotIndex);
+      const truncatedName = nameWithoutExt.substring(0, maxLength - extension.length - 3);
+      return `${truncatedName}...${extension}`;
+    }
+
+    // No extension or extension too long, just truncate
+    return filename.substring(0, maxLength - 3) + '...';
+  };
+
   // Pagination
   const totalPages = Math.ceil(documents.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentDocuments = documents.slice(startIndex, endIndex);
+
+  const handleClose = () => {
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -136,20 +173,25 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-        onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+      <div
+        className="fixed inset-0 flex items-center justify-center z-50 p-4"
+        onClick={handleClose}
+      >
         <div
           className="bg-gray-900 rounded-lg shadow-xl border border-gray-800 w-full max-w-2xl max-h-[80vh] flex flex-col"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
         >
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-800">
-            <h2 className="text-xl font-semibold">RAG Documents</h2>
+            <h1 className="header-title text-gradient">RAG Documents</h1>
             <button
-              onClick={onClose}
+              type="button"
+              onClick={handleClose}
               className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
@@ -179,6 +221,7 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
               />
 
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className="flex flex-col items-center gap-4 mx-auto"
@@ -227,13 +270,16 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <FileText className="w-5 h-5 text-blue-400 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium truncate">{doc.id}</div>
+                            <div className="font-medium truncate" title={doc.documentName || doc.id}>
+                              {truncateFilename(doc.documentName || doc.id)}
+                            </div>
                             <div className="text-sm text-gray-400">
                               {doc.chunkCount} chunks • {doc.totalTokens.toLocaleString()} tokens
                             </div>
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => handleDelete(doc.id)}
                           className="p-2 hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-lg transition-colors flex-shrink-0"
                           aria-label="Delete document"
@@ -252,6 +298,7 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
                       </div>
                       <div className="flex gap-2">
                         <button
+                          type="button"
                           onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                           disabled={currentPage === 1}
                           className="p-2 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -259,6 +306,7 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
                           <ChevronLeft className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                           disabled={currentPage === totalPages}
                           className="p-2 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

@@ -59,7 +59,12 @@ export default [
       'react/no-unknown-property': 'off', // Allow custom DOM properties
       'react-hooks/exhaustive-deps': 'off', // TypeScript handles this
       'react-hooks/rules-of-hooks': 'off', // TypeScript handles this
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['warn', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+        destructuredArrayIgnorePattern: '^_'
+      }],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-undef': 'off', // TypeScript handles this better
     },

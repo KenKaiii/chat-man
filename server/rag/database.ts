@@ -24,7 +24,7 @@ class RAGDatabase {
     try {
       this.table = await this.connection!.openTable('documents');
       console.log('✅ Opened existing documents table');
-    } catch (error) {
+    } catch (_error) {
       // Table doesn't exist, create it
       const sampleData: VectorDocument[] = [{
         id: 'init',
@@ -57,7 +57,7 @@ class RAGDatabase {
   ): Promise<VectorDocument[]> {
     const table = await this.ensureTable();
     const results = await table.search(queryVector).limit(limit).execute();
-    return results as any as VectorDocument[];
+    return results as unknown as VectorDocument[];
   }
 
   async deleteDocument(documentId: string): Promise<void> {
@@ -66,12 +66,18 @@ class RAGDatabase {
     // Get all documents
     const allResults = await table.search(Array(768).fill(0)).limit(10000).execute();
 
+    interface RowWithDistance {
+      _distance: number;
+      metadata?: { documentId: string };
+      [key: string]: unknown;
+    }
+
     // Filter out the chunks belonging to the document we want to delete
     // Also strip the _distance field to avoid schema issues
-    const remainingChunks = (allResults as any[])
-      .filter((row: any) => row.metadata?.documentId !== documentId)
-      .map((row: any) => {
-        const { _distance, ...cleanRow } = row;
+    const remainingChunks = (allResults as RowWithDistance[])
+      .filter((row) => row.metadata?.documentId !== documentId)
+      .map((row) => {
+        const { _distance: _, ...cleanRow } = row;
         return cleanRow;
       });
 
@@ -109,8 +115,12 @@ class RAGDatabase {
     // Get all vectors (limit to a reasonable number)
     const results = await table.search(Array(768).fill(0)).limit(1000).execute();
 
+    interface RowWithMetadata {
+      metadata?: { documentId: string };
+    }
+
     const documentIds = new Set<string>();
-    for (const row of results as any[]) {
+    for (const row of results as RowWithMetadata[]) {
       if (row.metadata?.documentId && row.metadata.documentId !== 'init') {
         documentIds.add(row.metadata.documentId);
       }
@@ -122,15 +132,26 @@ class RAGDatabase {
   async getDocumentStats(documentId: string): Promise<{
     chunkCount: number;
     totalTokens: number;
+    documentName?: string;
   }> {
     const table = await this.ensureTable();
     // Get all documents and filter in JavaScript (LanceDB filter syntax is complex for metadata)
     const allResults = await table.search(Array(768).fill(0)).limit(1000).execute();
-    const results = (allResults as any[]).filter((row: any) => row.metadata?.documentId === documentId);
+
+    interface RowWithTextAndMetadata {
+      text: string;
+      metadata?: { documentId: string; documentName?: string };
+    }
+
+    const results = (allResults as unknown as RowWithTextAndMetadata[]).filter((row) => row.metadata?.documentId === documentId);
+
+    // Get document name from first chunk's metadata
+    const documentName = results[0]?.metadata?.documentName;
 
     return {
       chunkCount: results.length,
-      totalTokens: results.reduce((sum: number, row: any) => sum + row.text.split(/\s+/).length, 0),
+      totalTokens: results.reduce((sum, row) => sum + row.text.split(/\s+/).length, 0),
+      documentName,
     };
   }
 }

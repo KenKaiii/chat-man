@@ -1,5 +1,5 @@
 /**
- * Agent Girl - Modern chat interface for Claude Agent SDK
+ * Chat Man - Modern chat interface for Claude Agent SDK
  * Copyright (C) 2025 KenKai
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -30,7 +30,7 @@ export function AboutButton() {
       <button
         onClick={() => setIsModalOpen(true)}
         className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-        aria-label="About Agent Girl"
+        aria-label="About Chat Man"
         title="About"
       >
         <Info className="w-4 h-4" style={{ color: 'rgb(var(--text-secondary))' }} />

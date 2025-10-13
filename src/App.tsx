@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { NewChatWelcome } from "./components/chat/NewChatWelcome";
 import { ChatContainer } from "./components/chat/ChatContainer";
@@ -13,6 +13,7 @@ import { RAGButton } from "./components/header/RAGButton";
 import { RAGModal } from "./components/rag/RAGModal";
 import { Toaster } from "sonner";
 import { Menu, Edit3 } from "lucide-react";
+import { useSessionAPI, type Session } from "./hooks/useSessionAPI";
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -20,41 +21,105 @@ const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRAGModalOpen, setIsRAGModalOpen] = useState(false);
+
   const [pendingMessage, setPendingMessage] = useState<{
     content: string;
-    files?: any[];
+    files?: import('./components/message/types').FileAttachment[];
     mode?: 'general' | 'rag' | 'spark' | 'voice';
   } | null>(null);
 
-  // Mock chat sessions for demonstration
-  const [chats] = useState([
-    {
-      id: '1',
-      title: 'Example Chat 1',
-      timestamp: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
-      isActive: false,
-    },
-    {
-      id: '2',
-      title: 'Example Chat 2',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-      isActive: false,
-    },
-  ]);
+  // Session management
+  const [chats, setChats] = useState<Session[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionMode, setCurrentSessionMode] = useState<'general' | 'rag' | 'spark' | 'voice'>('general');
+  const [currentMessages, setCurrentMessages] = useState<import('./components/message/types').Message[]>([]);
+  const sessionAPI = useSessionAPI();
 
-  const handleNewChat = () => {
+  // Load sessions on mount and create a refresh function
+  const loadSessions = async () => {
+    const sessions = await sessionAPI.fetchSessions();
+    setChats(sessions);
+  };
+
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
+  // Load messages and mode when switching sessions
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (currentSessionId && !pendingMessage) {
+        // Only load from DB if we don't have a pending message (existing chat)
+        const messages = await sessionAPI.fetchSessionMessages(currentSessionId);
+        setCurrentMessages(messages);
+
+        // Load session mode from the session object
+        const session = chats.find(c => c.id === currentSessionId);
+        if (session) {
+          setCurrentSessionMode(session.mode);
+        }
+      } else {
+        // New chat with pending message - start with empty
+        setCurrentMessages([]);
+        // Set mode from pending message if available
+        if (pendingMessage?.mode) {
+          setCurrentSessionMode(pendingMessage.mode);
+        }
+      }
+    };
+    loadMessages();
+  }, [currentSessionId, pendingMessage]);
+
+  const handleNewChat = async () => {
+    // Don't create session yet - wait until user submits with mode selection
+    setCurrentSessionId(null); // Clear current session
+    setCurrentSessionMode('general'); // Reset mode to general (default)
     setShowWelcome(true);
     setInputValue('');
     setPendingMessage(null);
+    setCurrentMessages([]); // Clear messages
   };
 
-  const handleWelcomeSubmit = (files?: any[], mode?: 'general' | 'rag' | 'spark' | 'voice') => {
+  const handleChatSelect = async (id: string) => {
+    setCurrentSessionId(id);
+    setShowWelcome(false);
+    setPendingMessage(null); // Clear pending message when switching to existing chat
+  };
+
+  const handleChatDelete = async (id: string) => {
+    const success = await sessionAPI.deleteSession(id);
+    if (success) {
+      setChats(chats.filter(c => c.id !== id));
+      if (currentSessionId === id) {
+        await handleNewChat();
+      }
+    }
+  };
+
+  const handleChatRename = async (id: string, newTitle: string) => {
+    const success = await sessionAPI.renameSession(id, newTitle);
+    if (success) {
+      setChats(chats.map(c => c.id === id ? { ...c, title: newTitle } : c));
+    }
+  };
+
+  const handleWelcomeSubmit = async (files?: import('./components/message/types').FileAttachment[], mode?: 'general' | 'rag' | 'spark' | 'voice') => {
     if (inputValue.trim()) {
+      const selectedMode = mode || 'general';
+
+      // Always create a new session with the selected mode
+      const newSession = await sessionAPI.createSession(selectedMode);
+      if (newSession) {
+        setChats([newSession, ...chats]);
+        setCurrentSessionId(newSession.id);
+        setCurrentSessionMode(selectedMode); // Set the session mode immediately
+      }
+
       // Store the message to be sent after transition
       setPendingMessage({
         content: inputValue,
         files,
-        mode,
+        mode: selectedMode,
       });
       setShowWelcome(false);
       setInputValue(''); // Clear the input
@@ -74,9 +139,9 @@ const App: React.FC = () => {
           onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
           chats={chats}
           onNewChat={handleNewChat}
-          onChatSelect={(id) => console.log('Selected chat:', id)}
-          onChatDelete={(id) => console.log('Delete chat:', id)}
-          onChatRename={(id, name) => console.log('Rename chat:', id, name)}
+          onChatSelect={handleChatSelect}
+          onChatDelete={handleChatDelete}
+          onChatRename={handleChatRename}
         />
 
         {/* Main Chat Area */}
@@ -155,15 +220,31 @@ const App: React.FC = () => {
               disabled={false}
               isGenerating={isGenerating}
             />
-          ) : (
+          ) : currentSessionId ? (
             <ChatContainer
+              key={currentSessionId}
               websocketUrl="ws://localhost:3001/ws"
-              initialMessages={[]}
-              onMessageSent={(msg) => console.log('Sent:', msg)}
+              sessionId={currentSessionId}
+              initialMessages={currentMessages}
+              onMessageSent={async (_msg) => {
+                // Clear pending message after first send
+                if (pendingMessage) {
+                  setPendingMessage(null);
+                }
+                // Refresh session list after a short delay to pick up title changes
+                setTimeout(async () => {
+                  await loadSessions();
+                }, 1000);
+              }}
               placeholder="Type a message..."
               initialInputValue={pendingMessage?.content}
               initialFiles={pendingMessage?.files}
+              mode={currentSessionMode}
             />
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-400">Creating chat session...</p>
+            </div>
           )}
         </div>
       </div>

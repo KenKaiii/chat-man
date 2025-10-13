@@ -2,7 +2,7 @@
  * Document upload component
  */
 import React, { useState, useRef } from 'react';
-import { Upload, File, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, AlertCircle, Loader2 } from 'lucide-react';
 
 export function DocumentUpload({ onUploadSuccess }: { onUploadSuccess?: () => void }) {
   const [uploading, setUploading] = useState(false);
@@ -32,7 +32,7 @@ export function DocumentUpload({ onUploadSuccess }: { onUploadSuccess?: () => vo
         throw new Error('Upload failed');
       }
 
-      const result = await response.json();
+      await response.json();
       setProgress('✓ Document processed successfully!');
 
       setTimeout(() => {

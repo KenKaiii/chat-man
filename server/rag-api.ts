@@ -45,7 +45,7 @@ export async function handleRAGUpload(req: Request): Promise<Response> {
       chunks.map(c => c.text)
     );
 
-    // Store in vector database
+    // Store in vector database (GLOBAL - all RAG sessions can access)
     const documentId = `doc_${Date.now()}`;
     const vectorDocs = chunks.map((chunk, i) => ({
       id: `${documentId}_${i}`,
@@ -63,6 +63,8 @@ export async function handleRAGUpload(req: Request): Promise<Response> {
 
     // Cleanup temp file
     await unlink(tempPath);
+
+    console.log(`✅ Uploaded document ${documentId} (globally accessible)`);
 
     return Response.json({
       success: true,

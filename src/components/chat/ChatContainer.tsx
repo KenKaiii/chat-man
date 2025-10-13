@@ -33,6 +33,11 @@ export interface ChatContainerProps {
   websocketUrl: string;
 
   /**
+   * Session ID for this chat (required for persistence)
+   */
+  sessionId: string;
+
+  /**
    * Initial messages to display (optional)
    */
   initialMessages?: Message[];
@@ -81,10 +86,16 @@ export interface ChatContainerProps {
    * Files to attach to initial message
    */
   initialFiles?: import('../message/types').FileAttachment[];
+
+  /**
+   * Chat mode (general, rag, spark, voice)
+   */
+  mode?: 'general' | 'rag' | 'spark' | 'voice';
 }
 
 export function ChatContainer({
   websocketUrl,
+  sessionId,
   initialMessages = [],
   onMessageSent,
   onMessageReceived,
@@ -95,6 +106,7 @@ export function ChatContainer({
   welcomeMessage = 'Start a conversation',
   initialInputValue,
   initialFiles,
+  mode = 'general',
 }: ChatContainerProps) {
   // Initialize messages with user message if initialInputValue is provided
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -128,6 +140,7 @@ export function ChatContainer({
       // Handle incoming WebSocket messages
       if (message.type === 'assistant_message' && 'content' in message) {
         const assistantContent = message.content as string;
+
         setMessages((prev) => {
           const lastMessage = prev[prev.length - 1];
 
@@ -143,9 +156,11 @@ export function ChatContainer({
 
             // If last block is text, append to it for smooth streaming
             if (lastBlock && lastBlock.type === 'text') {
+              const newText = lastBlock.text + assistantContent;
+
               const updatedContent = [
                 ...content.slice(0, -1),
-                { type: 'text' as const, text: lastBlock.text + assistantContent }
+                { type: 'text' as const, text: newText }
               ];
               const updatedMessage = {
                 ...lastMessage,
@@ -447,6 +462,8 @@ export function ChatContainer({
     sendMessage({
       type: 'chat',
       content: messageContent,
+      mode: mode,
+      sessionId: sessionId,
     });
 
     if (onMessageSent) {
@@ -507,6 +524,8 @@ export function ChatContainer({
       sendMessage({
         type: 'chat',
         content: messageContent,
+        mode: mode,
+        sessionId: sessionId,
       });
 
       if (onMessageSent) {
@@ -540,6 +559,7 @@ export function ChatContainer({
         disabled={!isConnected || disabled}
         isGenerating={isLoading}
         placeholder={placeholder}
+        mode={mode}
       />
     </div>
   );

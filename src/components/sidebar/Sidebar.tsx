@@ -1,5 +1,5 @@
 /**
- * Agent Girl - Modern chat interface for Claude Agent SDK
+ * Chat Man - Modern chat interface for Claude Agent SDK
  * Copyright (C) 2025 KenKai
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -21,11 +21,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Menu, Edit3, Search, Trash2, Edit } from 'lucide-react';
 import { toast } from '../../utils/toast';
+import type { Session } from '../../hooks/useSessionAPI';
 
-interface Chat {
-  id: string;
-  title: string;
-  timestamp: Date;
+interface Chat extends Session {
   isActive?: boolean;
   isLoading?: boolean;
 }
@@ -63,7 +61,7 @@ export function Sidebar({ isOpen, onToggle, chats = [], onNewChat, onChatSelect,
     };
 
     chats.forEach(chat => {
-      const chatDate = new Date(chat.timestamp);
+      const chatDate = new Date(chat.updated_at);
       const chatDay = new Date(chatDate.getFullYear(), chatDate.getMonth(), chatDate.getDate());
 
       const diffTime = today.getTime() - chatDay.getTime();

@@ -3,7 +3,7 @@
  */
 import { ragDatabase } from './database';
 import { generateEmbedding } from './embeddings';
-import type { RetrievalOptions, RetrievalResult, VectorDocument } from './types';
+import type { RetrievalOptions, RetrievalResult, ChunkWithDistance } from './types';
 
 export async function retrieveContext(
   query: string,
@@ -12,30 +12,30 @@ export async function retrieveContext(
   // Generate embedding for query
   const queryVector = await generateEmbedding(query);
 
-  // Search vector database (get more results if filtering)
+  // Search vector database (get more results if filtering by documentId)
   const searchLimit = options.documentId ? options.topK * 10 : options.topK;
   const allChunks = await ragDatabase.search(
     queryVector,
     searchLimit
   );
 
-  // Filter by documentId if specified (do in JavaScript)
+  // Filter by documentId if specified (documents are global, but can filter to specific doc)
   const chunks = options.documentId
-    ? allChunks.filter((chunk: any) => chunk.metadata?.documentId === options.documentId).slice(0, options.topK)
+    ? (allChunks as unknown as ChunkWithDistance[]).filter((chunk) => chunk.metadata?.documentId === options.documentId).slice(0, options.topK)
     : allChunks;
 
   // Filter by min score if specified
   const filteredChunks = options.minScore !== undefined
-    ? chunks.filter((chunk: any) => chunk._distance <= options.minScore!)
+    ? (chunks as ChunkWithDistance[]).filter((chunk) => chunk._distance <= options.minScore!)
     : chunks;
 
   // Assemble context from chunks
-  const context = filteredChunks
-    .map((chunk, i) => `[${i + 1}] ${chunk.text}`)
+  const context = (filteredChunks as ChunkWithDistance[])
+    .map((chunk, _i) => `[${_i + 1}] ${chunk.text}`)
     .join('\n\n');
 
   // Extract sources
-  const sources = filteredChunks.map((chunk, i) => ({
+  const sources = (filteredChunks as ChunkWithDistance[]).map((chunk) => ({
     documentId: chunk.metadata.documentId,
     documentName: chunk.metadata.documentName,
     chunkIndex: chunk.metadata.chunkIndex,
@@ -44,7 +44,7 @@ export async function retrieveContext(
   }));
 
   return {
-    chunks: filteredChunks,
+    chunks: filteredChunks as ChunkWithDistance[],
     context,
     sources,
   };

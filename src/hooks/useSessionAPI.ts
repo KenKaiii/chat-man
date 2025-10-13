@@ -1,5 +1,5 @@
 /**
- * Agent Girl - Modern chat interface for Claude Agent SDK
+ * Chat Man - Generic chat interface component library
  * Copyright (C) 2025 KenKai
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -18,43 +18,27 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { toast } from '../utils/toast';
-import { showError } from '../utils/errorMessages';
+import type { Message } from '../components/message/types';
 
 export interface Session {
   id: string;
   title: string;
   created_at: string;
   updated_at: string;
-  message_count: number;
-  working_directory: string;
-  permission_mode: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
   mode: 'general' | 'rag' | 'spark' | 'voice';
-}
-
-export interface SessionMessage {
-  id: string;
-  session_id: string;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
 }
 
 // Use dynamic URL based on current window location (works on any port)
 const API_BASE = `${window.location.protocol}//${window.location.host}/api`;
 
 export function useSessionAPI() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   /**
    * Fetch all sessions
    */
   const fetchSessions = useCallback(async (): Promise<Session[]> => {
-    setIsLoading(true);
-    setError(null);
-
     try {
       const response = await fetch(`${API_BASE}/sessions`);
 
@@ -62,36 +46,22 @@ export function useSessionAPI() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json() as { sessions: Session[]; warning?: string };
-
-      // Show warning if directories were recreated
-      if (data.warning) {
-        console.warn('⚠️  Directory warning:', data.warning);
-        // Show toast notification to user
-        toast.success(`${data.warning}`, {
-          description: 'Some chat folders were missing and have been recreated.',
-          duration: 5000,
-        });
-      }
-
-      return data.sessions;
+      const sessions = await response.json() as Session[];
+      return sessions;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch sessions';
-      setError(errorMsg);
-      showError('LOAD_CHATS', errorMsg);
+      console.error('Failed to fetch sessions:', errorMsg);
+      toast.error('Failed to load chats', {
+        description: errorMsg,
+      });
       return [];
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
   /**
    * Fetch messages for a specific session
    */
-  const fetchSessionMessages = useCallback(async (sessionId: string): Promise<SessionMessage[]> => {
-    setIsLoading(true);
-    setError(null);
-
+  const fetchSessionMessages = useCallback(async (sessionId: string): Promise<Message[]> => {
     try {
       const response = await fetch(`${API_BASE}/sessions/${sessionId}/messages`);
 
@@ -99,32 +69,29 @@ export function useSessionAPI() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const messages = await response.json() as SessionMessage[];
+      const messages = await response.json() as Message[];
       return messages;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch messages';
-      setError(errorMsg);
-      showError('LOAD_MESSAGES', errorMsg);
+      console.error('Failed to fetch messages:', errorMsg);
+      toast.error('Failed to load messages', {
+        description: errorMsg,
+      });
       return [];
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
   /**
    * Create a new session
    */
-  const createSession = useCallback(async (title?: string, mode?: 'general' | 'rag' | 'spark' | 'voice'): Promise<Session | null> => {
-    setIsLoading(true);
-    setError(null);
-
+  const createSession = useCallback(async (mode?: 'general' | 'rag' | 'spark' | 'voice'): Promise<Session | null> => {
     try {
       const response = await fetch(`${API_BASE}/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: title || 'New Chat', mode: mode || 'general' }),
+        body: JSON.stringify({ mode: mode || 'general' }),
       });
 
       if (!response.ok) {
@@ -135,11 +102,11 @@ export function useSessionAPI() {
       return session;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to create session';
-      setError(errorMsg);
-      showError('CREATE_CHAT', errorMsg);
+      console.error('Failed to create session:', errorMsg);
+      toast.error('Failed to create chat', {
+        description: errorMsg,
+      });
       return null;
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
@@ -147,9 +114,6 @@ export function useSessionAPI() {
    * Delete a session
    */
   const deleteSession = useCallback(async (sessionId: string): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-
     try {
       const response = await fetch(`${API_BASE}/sessions/${sessionId}`, {
         method: 'DELETE',
@@ -162,156 +126,47 @@ export function useSessionAPI() {
       return true;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to delete session';
-      setError(errorMsg);
-      showError('DELETE_CHAT', errorMsg);
+      console.error('Failed to delete session:', errorMsg);
+      toast.error('Failed to delete chat', {
+        description: errorMsg,
+      });
       return false;
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
   /**
-   * Rename a session folder (and title)
+   * Rename a session (update title)
    */
-  const renameSession = useCallback(async (sessionId: string, newFolderName: string): Promise<{ success: boolean; error?: string }> => {
-    setIsLoading(true);
-    setError(null);
-
+  const renameSession = useCallback(async (sessionId: string, newTitle: string): Promise<boolean> => {
     try {
       const response = await fetch(`${API_BASE}/sessions/${sessionId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ folderName: newFolderName }),
+        body: JSON.stringify({ title: newTitle }),
       });
 
-      const result = await response.json() as { success: boolean; error?: string; session?: Session };
-
-      if (!response.ok || !result.success) {
-        const errorMsg = result.error || `HTTP error! status: ${response.status}`;
-        setError(errorMsg);
-        return { success: false, error: errorMsg };
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return { success: true };
+      return true;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to rename session';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  /**
-   * Update working directory for a session
-   */
-  const updateWorkingDirectory = useCallback(async (sessionId: string, directory: string): Promise<{ success: boolean; session?: Session; error?: string }> => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${API_BASE}/sessions/${sessionId}/directory`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ workingDirectory: directory }),
+      console.error('Failed to rename session:', errorMsg);
+      toast.error('Failed to rename chat', {
+        description: errorMsg,
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json() as { success: boolean; session?: Session; error?: string };
-      return result;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update working directory';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  /**
-   * Validate a directory path
-   */
-  const validateDirectory = useCallback(async (directory: string): Promise<{ valid: boolean; error?: string; expanded?: string }> => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${API_BASE}/validate-directory`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ directory }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json() as { valid: boolean; error?: string; expanded?: string };
-      return result;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to validate directory';
-      setError(errorMsg);
-      showError('INVALID_DIRECTORY', errorMsg);
-      return { valid: false, error: errorMsg };
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  /**
-   * Update permission mode for a session
-   */
-  const updatePermissionMode = useCallback(async (
-    sessionId: string,
-    mode: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
-  ): Promise<{ success: boolean; session?: Session; error?: string }> => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${API_BASE}/sessions/${sessionId}/mode`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ mode }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json() as { success: boolean; session?: Session; error?: string };
-      return result;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update permission mode';
-      setError(errorMsg);
-      showError('UPDATE_MODE', errorMsg);
-      return { success: false, error: errorMsg };
-    } finally {
-      setIsLoading(false);
+      return false;
     }
   }, []);
 
   return {
-    isLoading,
-    error,
     fetchSessions,
     fetchSessionMessages,
     createSession,
     deleteSession,
     renameSession,
-    updateWorkingDirectory,
-    validateDirectory,
-    updatePermissionMode,
   };
 }

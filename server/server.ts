@@ -13,6 +13,8 @@ import type {
 } from './types';
 import { buildSystemContext, getModelConfig, loadSettings, reloadConfig } from './config';
 import { handleRAGUpload, handleRAGQuery, handleRAGList, handleRAGDelete } from './rag-api';
+import { retrieveContext } from './rag/retriever';
+import { SessionDatabase } from './database';
 
 const PORT = process.env.PORT || 3001;
 
@@ -30,11 +32,11 @@ function addCorsHeaders(response: Response): Response {
   });
 }
 
+// Initialize database
+const db = new SessionDatabase();
+
 // Track active generation streams per session
 const activeGenerations = new Map<string, AbortController>();
-
-// Conversation history per session (in-memory for demo)
-const conversationHistory = new Map<string, OllamaChatMessage[]>();
 
 // System context (loaded from config)
 let systemContext = '';
@@ -43,7 +45,7 @@ let systemContext = '';
 let modelConfig: Awaited<ReturnType<typeof getModelConfig>>;
 
 // WebSocket handler
-const server = Bun.serve({
+Bun.serve({
   port: PORT,
   async fetch(req, server) {
     const url = new URL(req.url);
@@ -73,7 +75,7 @@ const server = Bun.serve({
       try {
         const models = await listModels();
         return Response.json(models);
-      } catch (error) {
+      } catch (_error) {
         return Response.json(
           { error: 'Failed to fetch models' },
           { status: 500 }
@@ -100,7 +102,7 @@ const server = Bun.serve({
           success: true,
           message: 'Configuration reloaded successfully',
         });
-      } catch (error) {
+      } catch (_error) {
         return Response.json(
           { error: 'Failed to reload configuration' },
           { status: 500 }
@@ -113,7 +115,7 @@ const server = Bun.serve({
       try {
         const settings = await loadSettings();
         return Response.json(settings);
-      } catch (error) {
+      } catch (_error) {
         return Response.json(
           { error: 'Failed to load settings' },
           { status: 500 }
@@ -129,7 +131,7 @@ const server = Bun.serve({
         return Response.json({
           displayName: null
         });
-      } catch (error) {
+      } catch (_error) {
         return Response.json(
           { error: 'Failed to load user config' },
           { status: 500 }
@@ -160,11 +162,56 @@ const server = Bun.serve({
       }
     }
 
+    // Session Management: Get all sessions
+    if (url.pathname === '/api/sessions' && req.method === 'GET') {
+      const sessions = db.getAllSessions();
+      return addCorsHeaders(Response.json(sessions));
+    }
+
+    // Session Management: Create new session
+    if (url.pathname === '/api/sessions' && req.method === 'POST') {
+      const body = await req.json() as { mode?: 'general' | 'rag' | 'spark' | 'voice' };
+      const session = db.createSession(body.mode);
+      return addCorsHeaders(Response.json(session));
+    }
+
+    // Session Management: Get specific session
+    if (url.pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === 'GET') {
+      const id = url.pathname.split('/').pop()!;
+      const session = db.getSession(id);
+      if (!session) {
+        return addCorsHeaders(Response.json({ error: 'Session not found' }, { status: 404 }));
+      }
+      return addCorsHeaders(Response.json(session));
+    }
+
+    // Session Management: Get session messages
+    if (url.pathname.match(/^\/api\/sessions\/[^/]+\/messages$/) && req.method === 'GET') {
+      const id = url.pathname.split('/')[3];
+      const messages = db.getMessages(id);
+      return addCorsHeaders(Response.json(messages));
+    }
+
+    // Session Management: Update session (rename)
+    if (url.pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === 'PATCH') {
+      const id = url.pathname.split('/').pop()!;
+      const body = await req.json() as { title: string };
+      db.updateSessionTitle(id, body.title);
+      return addCorsHeaders(Response.json({ success: true }));
+    }
+
+    // Session Management: Delete session
+    if (url.pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === 'DELETE') {
+      const id = url.pathname.split('/').pop()!;
+      db.deleteSession(id);
+      return addCorsHeaders(Response.json({ success: true }));
+    }
+
     return new Response('Not found', { status: 404 });
   },
 
   websocket: {
-    open(ws: ServerWebSocket) {
+    open(_ws: ServerWebSocket) {
       console.log('✅ WebSocket client connected');
     },
 
@@ -186,7 +233,7 @@ const server = Bun.serve({
       }
     },
 
-    close(ws: ServerWebSocket) {
+    close(_ws: ServerWebSocket) {
       console.log('❌ WebSocket client disconnected');
     },
   },
@@ -196,7 +243,18 @@ const server = Bun.serve({
  * Handle incoming chat messages
  */
 async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
-  const sessionId = data.sessionId || 'default';
+  const sessionId = data.sessionId;
+
+  if (!sessionId) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Session ID is required',
+    }));
+    return;
+  }
+
+  // Debug: Log incoming message
+  console.log('📨 Received chat message:', { mode: data.mode, sessionId });
 
   // Extract text content
   let userMessage = '';
@@ -216,28 +274,116 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
     return;
   }
 
-  // Get or create conversation history
-  if (!conversationHistory.has(sessionId)) {
-    conversationHistory.set(sessionId, []);
+  // Get or create session
+  let session = db.getSession(sessionId);
+  if (!session) {
+    session = db.createSession(data.mode || 'general');
   }
-  const history = conversationHistory.get(sessionId)!;
 
-  // Add system context as first message if this is a new conversation
-  if (history.length === 0 && systemContext) {
+  // Load mode-specific system context for this session
+  const sessionSystemContext = await buildSystemContext(session.mode);
+
+  // Load conversation history from database
+  const dbMessages = db.getMessages(sessionId);
+
+  // Keep only the last 10 messages for context window
+  const MAX_CONTEXT_MESSAGES = 10;
+  const recentMessages = dbMessages.slice(-MAX_CONTEXT_MESSAGES);
+
+  const history: OllamaChatMessage[] = [];
+
+  // Add mode-specific system context as first message
+  if (sessionSystemContext) {
     history.push({
       role: 'system',
-      content: systemContext,
+      content: sessionSystemContext,
     });
   }
 
-  // Add user message to history
+  interface ContentBlock {
+    type: 'text' | 'tool_use' | 'thinking' | 'tool_result';
+    text?: string;
+  }
+
+  // Convert database messages to Ollama format
+  for (const msg of recentMessages) {
+    if (msg.type === 'user') {
+      history.push({
+        role: 'user',
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      });
+    } else if (msg.type === 'assistant') {
+      // Extract text from assistant content blocks
+      const content = Array.isArray(msg.content) ? msg.content : [msg.content];
+      const textBlocks = (content as ContentBlock[]).filter((b) => b.type === 'text');
+      const text = textBlocks.map((b) => b.text).join('');
+      if (text) {
+        history.push({
+          role: 'assistant',
+          content: text,
+        });
+      }
+    }
+  }
+
+  // Add new user message to history (for Ollama)
   history.push({
     role: 'user',
     content: userMessage,
   });
 
+  // Save user message to database
+  const userMessageId = crypto.randomUUID();
+  db.addMessage(sessionId, {
+    id: userMessageId,
+    type: 'user',
+    content: userMessage,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Auto-generate title if this is the first user message
+  const userMessageCount = dbMessages.filter(m => m.type === 'user').length;
+  if (userMessageCount === 0) {
+    db.autoGenerateTitle(sessionId, userMessage);
+  }
+
+  // RAG: Retrieve context if RAG mode is enabled
+  if (data.mode === 'rag') {
+    try {
+      console.log('🔍 RAG mode enabled, retrieving context for:', userMessage.substring(0, 60) + '...');
+      // Note: Documents are global, but context injection is session-specific
+      // because it's only added to this session's in-memory history and not saved to DB
+      const ragResult = await retrieveContext(userMessage, { topK: 5 });
+
+      if (ragResult.context && ragResult.chunks.length > 0) {
+        console.log(`✅ Retrieved ${ragResult.chunks.length} relevant document chunks`);
+        console.log('📄 Context preview:', ragResult.context.substring(0, 200) + '...');
+
+        // Inject RAG context as USER message with special formatting
+        // (Ollama handles multiple system messages poorly)
+        const ragContextMessage = `[Context from uploaded documents]:\n\n${ragResult.context}\n\n[End of context]\n\nNow please answer this question based on the context above: ${userMessage}`;
+
+        // Replace the last user message with one that includes context
+        history[history.length - 1] = {
+          role: 'user',
+          content: ragContextMessage
+        };
+
+        console.log('💬 Injected RAG context into user message');
+      } else {
+        console.log('⚠️  No relevant context found in uploaded documents');
+      }
+    } catch (error) {
+      console.error('❌ Error retrieving RAG context:', error);
+      // Continue without RAG context
+    }
+  }
+
   // Get model (use default or from config if not specified)
   const model = data.model || modelConfig.name || await getDefaultModel();
+
+  console.log(`🤖 Sending ${history.length} messages to Ollama (model: ${model})`);
+  console.log('📋 History structure:', history.map(m => ({ role: m.role, contentLength: m.content.length })));
 
   // Create abort controller for this generation
   const abortController = new AbortController();
@@ -246,6 +392,8 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
   try {
     let fullResponse = '';
     let tokenCount = 0;
+
+    console.log('⏳ Starting Ollama stream...');
 
     // Stream response from Ollama with model config
     for await (const chunk of streamChat(model, history, {
@@ -282,10 +430,13 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
 
       // Check if done
       if (chunk.done) {
-        // Add assistant response to history
-        history.push({
-          role: 'assistant',
-          content: fullResponse,
+        // Save assistant response to database
+        const assistantMessageId = crypto.randomUUID();
+        db.addMessage(sessionId, {
+          id: assistantMessageId,
+          type: 'assistant',
+          content: [{ type: 'text' as const, text: fullResponse }],
+          timestamp: new Date().toISOString(),
         });
 
         // Send final token count
@@ -353,7 +504,7 @@ function handleStopGeneration(data: StopGenerationMessage) {
     console.log('✅ Configuration loaded');
     console.log(`📝 System prompt: ${systemContext.split('\n')[0].substring(0, 60)}...`);
     console.log(`🎛️  Model config: ${modelConfig.name} (temp: ${modelConfig.temperature})`);
-  } catch (error) {
+  } catch (_error) {
     console.warn('⚠️  Failed to load configuration, using defaults');
     modelConfig = {
       name: 'llama3.2:3b',
@@ -376,7 +527,7 @@ function handleStopGeneration(data: StopGenerationMessage) {
     try {
       const defaultModel = await getDefaultModel();
       console.log(`✅ Using model: ${defaultModel}`);
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  No models found. Install one with: ollama pull llama3.2');
     }
   }
