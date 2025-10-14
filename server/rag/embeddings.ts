@@ -2,6 +2,7 @@
  * Ollama embedding generation
  */
 import type { EmbeddingResponse } from './types';
+import { logger } from '../utils/secureLogger';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const EMBEDDING_MODEL = 'nomic-embed-text';
@@ -39,8 +40,11 @@ export async function generateEmbeddingsBatch(
     );
     embeddings.push(...batchEmbeddings);
 
-    // Progress logging
-    console.log(`Generated embeddings: ${Math.min(i + batchSize, texts.length)}/${texts.length}`);
+    // Progress logging (safe - only counts, no content)
+    logger.debug('Generated embeddings', {
+      progress: `${Math.min(i + batchSize, texts.length)}/${texts.length}`,
+      // text content: NEVER LOGGED
+    });
   }
 
   return embeddings;

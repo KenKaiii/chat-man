@@ -15,6 +15,17 @@ import { buildSystemContext, getModelConfig, loadSettings, reloadConfig } from '
 import { handleRAGUpload, handleRAGQuery, handleRAGList, handleRAGDelete } from './rag-api';
 import { retrieveContext } from './rag/retriever';
 import { SessionDatabase } from './database';
+import { logger } from './utils/secureLogger';
+import { authenticateWebSocket, isAuthenticationRequired, authMiddleware } from './auth/middleware';
+import {
+  handleAuthSetup,
+  handleAuthLogin,
+  handleAuthChangePassword,
+  handleAuthRefresh,
+  handleAuthValidate,
+  handleAuthStatus,
+} from './auth-api';
+import { ensureEncryptionUnlocked } from './encryption/setupWizard';
 
 const PORT = process.env.PORT || 3001;
 
@@ -32,14 +43,11 @@ function addCorsHeaders(response: Response): Response {
   });
 }
 
-// Initialize database
-const db = new SessionDatabase();
+// Database (initialized after encryption)
+let db: SessionDatabase;
 
 // Track active generation streams per session
 const activeGenerations = new Map<string, AbortController>();
-
-// System context (loaded from config)
-let systemContext = '';
 
 // Model configuration
 let modelConfig: Awaited<ReturnType<typeof getModelConfig>>;
@@ -63,6 +71,18 @@ Bun.serve({
 
     // WebSocket upgrade for /ws
     if (url.pathname === '/ws') {
+      // Authenticate WebSocket connection if authentication is enabled
+      if (isAuthenticationRequired()) {
+        const auth = authenticateWebSocket(req.url);
+        if (!auth.authenticated) {
+          logger.warn('WebSocket connection rejected - authentication failed');
+          return new Response(JSON.stringify({ error: auth.error || 'Unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
       const upgraded = server.upgrade(req);
       if (!upgraded) {
         return new Response('WebSocket upgrade failed', { status: 500 });
@@ -74,39 +94,39 @@ Bun.serve({
     if (url.pathname === '/api/models') {
       try {
         const models = await listModels();
-        return Response.json(models);
+        return addCorsHeaders(Response.json(models));
       } catch (_error) {
-        return Response.json(
+        return addCorsHeaders(Response.json(
           { error: 'Failed to fetch models' },
           { status: 500 }
-        );
+        ));
       }
     }
 
     // Health check
     if (url.pathname === '/api/health') {
       const ollamaHealthy = await checkOllamaHealth();
-      return Response.json({
+      return addCorsHeaders(Response.json({
         status: ollamaHealthy ? 'ok' : 'ollama_unavailable',
         ollama: ollamaHealthy,
-      });
+        authRequired: isAuthenticationRequired(),
+      }));
     }
 
     // Reload configuration
     if (url.pathname === '/api/reload-config' && req.method === 'POST') {
       try {
-        const { systemContext: newContext, settings } = await reloadConfig();
-        systemContext = newContext;
+        const { settings } = await reloadConfig();
         modelConfig = settings.model;
-        return Response.json({
+        return addCorsHeaders(Response.json({
           success: true,
           message: 'Configuration reloaded successfully',
-        });
+        }));
       } catch (_error) {
-        return Response.json(
+        return addCorsHeaders(Response.json(
           { error: 'Failed to reload configuration' },
           { status: 500 }
-        );
+        ));
       }
     }
 
@@ -114,12 +134,12 @@ Bun.serve({
     if (url.pathname === '/api/settings') {
       try {
         const settings = await loadSettings();
-        return Response.json(settings);
+        return addCorsHeaders(Response.json(settings));
       } catch (_error) {
-        return Response.json(
+        return addCorsHeaders(Response.json(
           { error: 'Failed to load settings' },
           { status: 500 }
-        );
+        ));
       }
     }
 
@@ -128,37 +148,66 @@ Bun.serve({
       try {
         // For now, return a default empty config
         // In the future, this could read from a user-config.json file
-        return Response.json({
+        return addCorsHeaders(Response.json({
           displayName: null
-        });
+        }));
       } catch (_error) {
-        return Response.json(
+        return addCorsHeaders(Response.json(
           { error: 'Failed to load user config' },
           { status: 500 }
-        );
+        ));
       }
+    }
+
+    // Authentication API Endpoints
+    if (url.pathname === '/api/auth/setup' && req.method === 'POST') {
+      return addCorsHeaders(await handleAuthSetup(req));
+    }
+
+    if (url.pathname === '/api/auth/login' && req.method === 'POST') {
+      return addCorsHeaders(await handleAuthLogin(req));
+    }
+
+    if (url.pathname === '/api/auth/change-password' && req.method === 'POST') {
+      const auth = authMiddleware(req);
+      if (!auth.authenticated) {
+        return addCorsHeaders(Response.json({ error: auth.error }, { status: auth.statusCode || 401 }));
+      }
+      return addCorsHeaders(await handleAuthChangePassword(req));
+    }
+
+    if (url.pathname === '/api/auth/refresh' && req.method === 'POST') {
+      return addCorsHeaders(await handleAuthRefresh(req));
+    }
+
+    if (url.pathname === '/api/auth/validate' && req.method === 'POST') {
+      return addCorsHeaders(await handleAuthValidate(req));
+    }
+
+    if (url.pathname === '/api/auth/status' && req.method === 'GET') {
+      return addCorsHeaders(await handleAuthStatus(req));
     }
 
     // RAG: Upload document
     if (url.pathname === '/api/rag/upload' && req.method === 'POST') {
-      return await handleRAGUpload(req);
+      return addCorsHeaders(await handleRAGUpload(req));
     }
 
     // RAG: Query documents
     if (url.pathname === '/api/rag/query' && req.method === 'POST') {
-      return await handleRAGQuery(req);
+      return addCorsHeaders(await handleRAGQuery(req));
     }
 
     // RAG: List documents
     if (url.pathname === '/api/rag/documents' && req.method === 'GET') {
-      return await handleRAGList();
+      return addCorsHeaders(await handleRAGList());
     }
 
     // RAG: Delete document
     if (url.pathname.startsWith('/api/rag/documents/') && req.method === 'DELETE') {
       const documentId = url.pathname.split('/').pop();
       if (documentId) {
-        return await handleRAGDelete(documentId);
+        return addCorsHeaders(await handleRAGDelete(documentId));
       }
     }
 
@@ -212,7 +261,7 @@ Bun.serve({
 
   websocket: {
     open(_ws: ServerWebSocket) {
-      console.log('✅ WebSocket client connected');
+      logger.info('WebSocket client connected');
     },
 
     async message(ws: ServerWebSocket, message: string | Buffer) {
@@ -225,7 +274,7 @@ Bun.serve({
           handleStopGeneration(data as StopGenerationMessage);
         }
       } catch (error) {
-        console.error('WebSocket message error:', error);
+        logger.error('WebSocket message error', { error: error instanceof Error ? error.message : 'Unknown error' });
         ws.send(JSON.stringify({
           type: 'error',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -234,7 +283,7 @@ Bun.serve({
     },
 
     close(_ws: ServerWebSocket) {
-      console.log('❌ WebSocket client disconnected');
+      logger.info('WebSocket client disconnected');
     },
   },
 });
@@ -253,8 +302,12 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
     return;
   }
 
-  // Debug: Log incoming message
-  console.log('📨 Received chat message:', { mode: data.mode, sessionId });
+  // Log incoming message (NEVER log content - HIPAA/GDPR)
+  logger.info('Received chat message', {
+    mode: data.mode,
+    sessionId: sessionId.substring(0, 8) + '...',
+    // content: NEVER LOGGED
+  });
 
   // Extract text content
   let userMessage = '';
@@ -266,6 +319,7 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
   }
 
   if (!userMessage.trim()) {
+    logger.warn('Empty message received', { sessionId: sessionId.substring(0, 8) + '...' });
     ws.send(JSON.stringify({
       type: 'error',
       message: 'Empty message',
@@ -350,14 +404,16 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
   // RAG: Retrieve context if RAG mode is enabled
   if (data.mode === 'rag') {
     try {
-      console.log('🔍 RAG mode enabled, retrieving context for:', userMessage.substring(0, 60) + '...');
+      logger.info('RAG mode enabled, retrieving context');
       // Note: Documents are global, but context injection is session-specific
       // because it's only added to this session's in-memory history and not saved to DB
       const ragResult = await retrieveContext(userMessage, { topK: 5 });
 
       if (ragResult.context && ragResult.chunks.length > 0) {
-        console.log(`✅ Retrieved ${ragResult.chunks.length} relevant document chunks`);
-        console.log('📄 Context preview:', ragResult.context.substring(0, 200) + '...');
+        logger.info('Retrieved relevant document chunks', {
+          chunkCount: ragResult.chunks.length,
+          // context: NEVER LOGGED - may contain PHI
+        });
 
         // Inject RAG context as USER message with special formatting
         // (Ollama handles multiple system messages poorly)
@@ -369,12 +425,12 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
           content: ragContextMessage
         };
 
-        console.log('💬 Injected RAG context into user message');
+        logger.debug('Injected RAG context into user message');
       } else {
-        console.log('⚠️  No relevant context found in uploaded documents');
+        logger.warn('No relevant context found in uploaded documents');
       }
     } catch (error) {
-      console.error('❌ Error retrieving RAG context:', error);
+      logger.error('Error retrieving RAG context', { error: error instanceof Error ? error.message : 'Unknown' });
       // Continue without RAG context
     }
   }
@@ -382,8 +438,14 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
   // Get model (use default or from config if not specified)
   const model = data.model || modelConfig.name || await getDefaultModel();
 
-  console.log(`🤖 Sending ${history.length} messages to Ollama (model: ${model})`);
-  console.log('📋 History structure:', history.map(m => ({ role: m.role, contentLength: m.content.length })));
+  logger.info('Sending messages to Ollama', {
+    model,
+    messageCount: history.length,
+    sessionId: sessionId.substring(0, 8) + '...',
+  });
+  logger.debug('History structure', {
+    history: history.map(m => ({ role: m.role, contentLength: m.content.length }))
+  });
 
   // Create abort controller for this generation
   const abortController = new AbortController();
@@ -393,7 +455,7 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
     let fullResponse = '';
     let tokenCount = 0;
 
-    console.log('⏳ Starting Ollama stream...');
+    logger.debug('Starting Ollama stream');
 
     // Stream response from Ollama with model config
     for await (const chunk of streamChat(model, history, {
@@ -403,7 +465,7 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
     })) {
       // Check if generation was stopped
       if (abortController.signal.aborted) {
-        console.log('Generation stopped for session:', sessionId);
+        logger.info('Generation stopped', { sessionId: sessionId.substring(0, 8) + '...' });
         break;
       }
 
@@ -456,7 +518,10 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
       }
     }
   } catch (error) {
-    console.error('Error streaming from Ollama:', error);
+    logger.error('Error streaming from Ollama', {
+      error: error instanceof Error ? error.message : 'Unknown',
+      sessionId: sessionId.substring(0, 8) + '...',
+    });
 
     let errorMessage = 'An error occurred while generating response';
     let errorType = 'unknown_error';
@@ -491,21 +556,46 @@ function handleStopGeneration(data: StopGenerationMessage) {
   if (abortController) {
     abortController.abort();
     activeGenerations.delete(sessionId);
-    console.log('Stopped generation for session:', sessionId);
+    logger.info('Stopped generation', { sessionId: sessionId.substring(0, 8) + '...' });
   }
 }
 
 // Load configuration and check Ollama health on startup
 (async () => {
+  // Initialize encryption (first-run setup wizard if needed)
+  try {
+    await ensureEncryptionUnlocked();
+    logger.info('Encryption system initialized');
+  } catch (error) {
+    logger.error('Failed to initialize encryption', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+    logger.error('Cannot start server without encryption. Exiting...');
+    process.exit(1);
+  }
+
+  // Initialize database (after encryption is ready)
+  try {
+    db = new SessionDatabase();
+    logger.info('Database initialized');
+  } catch (error) {
+    logger.error('Failed to initialize database', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+    logger.error('Cannot start server without database. Exiting...');
+    process.exit(1);
+  }
+
   // Load configuration
   try {
-    systemContext = await buildSystemContext();
+    await buildSystemContext();
     modelConfig = await getModelConfig();
-    console.log('✅ Configuration loaded');
-    console.log(`📝 System prompt: ${systemContext.split('\n')[0].substring(0, 60)}...`);
-    console.log(`🎛️  Model config: ${modelConfig.name} (temp: ${modelConfig.temperature})`);
+    logger.info('Configuration loaded', {
+      model: modelConfig.name,
+      temperature: modelConfig.temperature,
+    });
   } catch (_error) {
-    console.warn('⚠️  Failed to load configuration, using defaults');
+    logger.warn('Failed to load configuration, using defaults');
     modelConfig = {
       name: 'llama3.2:3b',
       temperature: 0.7,
@@ -519,19 +609,19 @@ function handleStopGeneration(data: StopGenerationMessage) {
   const healthy = await checkOllamaHealth();
 
   if (!healthy) {
-    console.warn('⚠️  Ollama is not running or not accessible at http://localhost:11434');
-    console.warn('   Please start Ollama: ollama serve');
-    console.warn('   Or install it: https://ollama.ai');
+    logger.warn('Ollama is not running or not accessible at http://localhost:11434');
+    logger.warn('Please start Ollama: ollama serve');
+    logger.warn('Or install it: https://ollama.ai');
   } else {
-    console.log('✅ Ollama is running');
+    logger.info('Ollama is running');
     try {
       const defaultModel = await getDefaultModel();
-      console.log(`✅ Using model: ${defaultModel}`);
+      logger.info('Using model', { model: defaultModel });
     } catch (_error) {
-      console.warn('⚠️  No models found. Install one with: ollama pull llama3.2');
+      logger.warn('No models found. Install one with: ollama pull llama3.2');
     }
   }
 })();
 
-console.log(`🚀 Server running on http://localhost:${PORT}`);
-console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`);
+logger.info('Server running', { port: PORT });
+logger.info('WebSocket endpoint', { endpoint: `ws://localhost:${PORT}/ws` });

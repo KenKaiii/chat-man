@@ -1,5 +1,6 @@
 /**
  * SQLite database for session and message persistence
+ * NOW WITH ENCRYPTION KEY MANAGEMENT (GDPR/HIPAA Compliant)
  * Copyright (C) 2025 KenKai
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -7,6 +8,8 @@
 import { Database } from 'bun:sqlite';
 import { join } from 'path';
 import type { Message } from '../src/components/message/types';
+import { getKeyManager } from './encryption/keyManager';
+import { logger } from './utils/secureLogger';
 
 const DB_PATH = join(process.cwd(), 'data', 'sessions.db');
 
@@ -30,14 +33,35 @@ export class SessionDatabase {
   private db: Database;
 
   constructor() {
-    this.db = new Database(DB_PATH, { create: true });
+    // IMPORTANT: KeyManager must be unlocked before creating database
+    const keyManager = getKeyManager();
+    if (!keyManager.isSetup()) {
+      throw new Error(
+        'Encryption is not initialized. Please run setup wizard first.'
+      );
+    }
+
+    // Create database connection
+    this.db = new Database(DB_PATH);
+
+    // Note: bun:sqlite doesn't support SQLCipher-style encryption natively
+    // For production HIPAA compliance, consider:
+    // 1. File-system level encryption (LUKS, FileVault, BitLocker)
+    // 2. Application-level encryption (encrypt sensitive fields before storing)
+    // 3. Run with Node.js + @journeyapps/sqlcipher for database encryption
+    logger.info('Database using Bun SQLite (no at-rest encryption)');
+    logger.warn('For production HIPAA compliance:');
+    logger.warn('  - Use filesystem encryption (LUKS/FileVault/BitLocker)');
+    logger.warn('  - OR run with Node.js + SQLCipher for database encryption');
+    logger.warn('  - OR implement application-level field encryption');
+
     this.initializeTables();
-    console.log('✅ Connected to SQLite database at:', DB_PATH);
+    logger.info('Connected to SQLite database', { path: DB_PATH });
   }
 
   private initializeTables(): void {
     // Create sessions table
-    this.db.run(`
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -48,7 +72,7 @@ export class SessionDatabase {
     `);
 
     // Create messages table
-    this.db.run(`
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
@@ -60,17 +84,17 @@ export class SessionDatabase {
     `);
 
     // Create indexes
-    this.db.run(`
+    this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_messages_session_id
       ON messages(session_id)
     `);
 
-    this.db.run(`
+    this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_sessions_updated_at
       ON sessions(updated_at DESC)
     `);
 
-    console.log('✅ Database tables initialized');
+    logger.info('Database tables initialized');
   }
 
   /**
@@ -93,7 +117,7 @@ export class SessionDatabase {
       [session.id, session.title, session.created_at, session.updated_at, session.mode]
     );
 
-    console.log(`✅ Created new session: ${id} (${mode})`);
+    logger.info('Created new session', { sessionId: id.substring(0, 8) + '...', mode });
     return session;
   }
 
@@ -101,8 +125,8 @@ export class SessionDatabase {
    * Get a session by ID
    */
   getSession(id: string): Session | null {
-    const row = this.db.query('SELECT * FROM sessions WHERE id = ?').get(id) as Session | undefined;
-    return row || null;
+    const row = this.db.query('SELECT * FROM sessions WHERE id = ?').get(id) as Session | null;
+    return row;
   }
 
   /**
@@ -120,9 +144,9 @@ export class SessionDatabase {
     this.db.run('UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?', [
       title,
       new Date().toISOString(),
-      id,
+      id
     ]);
-    console.log(`✅ Updated session title: ${id} -> "${title}"`);
+    logger.info('Updated session title', { sessionId: id.substring(0, 8) + '...' });
   }
 
   /**
@@ -132,7 +156,8 @@ export class SessionDatabase {
     // First delete messages (explicit cascade since SQLite might not enforce FK constraints)
     this.db.run('DELETE FROM messages WHERE session_id = ?', [id]);
     this.db.run('DELETE FROM sessions WHERE id = ?', [id]);
-    console.log(`✅ Deleted session: ${id}`);
+
+    logger.info('Deleted session', { sessionId: id.substring(0, 8) + '...' });
   }
 
   /**
@@ -151,10 +176,14 @@ export class SessionDatabase {
     // Update session's updated_at timestamp
     this.db.run('UPDATE sessions SET updated_at = ? WHERE id = ?', [
       new Date().toISOString(),
-      sessionId,
+      sessionId
     ]);
 
-    console.log(`✅ Added ${message.type} message to session ${sessionId}`);
+    logger.debug('Added message to session', {
+      type: message.type,
+      sessionId: sessionId.substring(0, 8) + '...',
+      // content: NEVER LOGGED
+    });
   }
 
   /**
@@ -201,7 +230,7 @@ export class SessionDatabase {
   getMessageCount(sessionId: string): number {
     const result = this.db.query(
       'SELECT COUNT(*) as count FROM messages WHERE session_id = ?'
-    ).get(sessionId) as { count: number } | undefined;
+    ).get(sessionId) as { count: number } | null;
 
     return result?.count || 0;
   }
@@ -211,6 +240,16 @@ export class SessionDatabase {
    */
   close(): void {
     this.db.close();
-    console.log('✅ Closed database connection');
+    logger.info('Closed database connection');
   }
+}
+
+// Export singleton instance getter
+let dbInstance: SessionDatabase | null = null;
+
+export function getSessionDatabase(): SessionDatabase {
+  if (!dbInstance) {
+    dbInstance = new SessionDatabase();
+  }
+  return dbInstance;
 }

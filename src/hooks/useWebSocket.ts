@@ -20,6 +20,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { showError } from '../utils/errorMessages';
+import { useAuth } from '../components/auth/AuthContext';
 
 interface BaseWebSocketMessage {
   type: string;
@@ -166,6 +167,8 @@ export function useWebSocket({
   const messageQueueRef = useRef<string[]>([]);
   const reconnectAttemptsRef = useRef(0);
   const isMountedRef = useRef(false);
+  const connectionOpenedRef = useRef(false); // Track if connection ever opened
+  const { token, logout } = useAuth();
 
   // Use refs for callbacks to prevent reconnections when they change
   const onMessageRef = useRef(onMessage);
@@ -192,12 +195,18 @@ export function useWebSocket({
     }
 
     try {
-      const ws = new WebSocket(url);
+      // Add JWT token to WebSocket URL if authenticated
+      let wsUrl = url;
+      if (token) {
+        wsUrl = `${url}?token=${encodeURIComponent(token)}`;
+      }
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setIsConnected(true);
         reconnectAttemptsRef.current = 0;
+        connectionOpenedRef.current = true; // Mark that connection was successful
         onConnectRef.current?.();
 
         // Send any queued messages
@@ -226,6 +235,17 @@ export function useWebSocket({
         onDisconnectRef.current?.();
         wsRef.current = null;
 
+        // If connection was rejected immediately (never opened) and we have a token,
+        // it's likely an authentication error - logout to force re-login
+        if (!connectionOpenedRef.current && token) {
+          console.warn('WebSocket connection rejected - likely authentication failure. Logging out...');
+          logout();
+          return; // Don't attempt reconnection
+        }
+
+        // Reset connection flag for next attempt
+        connectionOpenedRef.current = false;
+
         // Only attempt reconnection if still mounted
         if (isMountedRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current += 1;
@@ -237,7 +257,7 @@ export function useWebSocket({
     } catch {
       // Failed to create WebSocket connection
     }
-  }, [url, maxReconnectAttempts, reconnectDelay]);
+  }, [url, maxReconnectAttempts, reconnectDelay, token]);
 
   const sendMessage = useCallback((message: Record<string, unknown>) => {
     const messageStr = JSON.stringify(message);

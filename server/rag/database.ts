@@ -4,6 +4,7 @@
 import { connect, Connection, Table } from 'vectordb';
 import { join } from 'path';
 import type { VectorDocument } from './types';
+import { logger } from '../utils/secureLogger';
 
 const DB_PATH = join(process.cwd(), 'data', 'rag-vectors');
 
@@ -13,7 +14,7 @@ class RAGDatabase {
 
   async connect(): Promise<void> {
     this.connection = await connect(DB_PATH);
-    console.log('✅ Connected to LanceDB at:', DB_PATH);
+    logger.info('Connected to LanceDB', { path: DB_PATH });
   }
 
   async ensureTable(): Promise<Table> {
@@ -23,7 +24,7 @@ class RAGDatabase {
 
     try {
       this.table = await this.connection!.openTable('documents');
-      console.log('✅ Opened existing documents table');
+      logger.debug('Opened existing documents table');
     } catch (_error) {
       // Table doesn't exist, create it
       const sampleData: VectorDocument[] = [{
@@ -39,7 +40,7 @@ class RAGDatabase {
       }];
 
       this.table = await this.connection!.createTable('documents', sampleData);
-      console.log('✅ Created new documents table');
+      logger.info('Created new documents table');
     }
 
     return this.table;
@@ -48,7 +49,10 @@ class RAGDatabase {
   async addDocuments(documents: VectorDocument[]): Promise<void> {
     const table = await this.ensureTable();
     await table.add(documents);
-    console.log(`✅ Added ${documents.length} document chunks`);
+    logger.info('Added document chunks', {
+      chunkCount: documents.length,
+      // text content: NEVER LOGGED - may contain PHI
+    });
   }
 
   async search(
@@ -107,7 +111,7 @@ class RAGDatabase {
       this.table = await this.connection!.createTable('documents', sampleData);
     }
 
-    console.log(`✅ Deleted document: ${documentId}`);
+    logger.info('Deleted document', { documentId: documentId.substring(0, 8) + '...' });
   }
 
   async listDocuments(): Promise<string[]> {

@@ -22,6 +22,8 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { AuthProvider } from './components/auth/AuthContext';
+import { AuthWrapper } from './components/auth/AuthWrapper';
 import './globals.css';
 
 const container = document.getElementById('root');
@@ -30,6 +32,10 @@ if (!container) throw new Error('Root element not found');
 const root = createRoot(container);
 root.render(
   <ErrorBoundary>
-    <App />
+    <AuthProvider>
+      <AuthWrapper>
+        <App />
+      </AuthWrapper>
+    </AuthProvider>
   </ErrorBoundary>
 );
