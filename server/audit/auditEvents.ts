@@ -20,13 +20,18 @@ export enum AuditEventType {
   // Data management events
   DATA_EXPORT = 'DATA_EXPORT',
   DATA_DELETE_ALL = 'DATA_DELETE_ALL',
+  DATA_ACCESS = 'DATA_ACCESS',
+  DATA_MODIFY = 'DATA_MODIFY',
   SESSION_CREATE = 'SESSION_CREATE',
   SESSION_DELETE = 'SESSION_DELETE',
+  SESSION_VIEW = 'SESSION_VIEW',
 
   // Backup events
   BACKUP_CREATE = 'BACKUP_CREATE',
   BACKUP_RESTORE = 'BACKUP_RESTORE',
   BACKUP_DELETE = 'BACKUP_DELETE',
+  BACKUP_VERIFY = 'BACKUP_VERIFY',
+  BACKUP_TEST_RESTORE = 'BACKUP_TEST_RESTORE',
 
   // Retention events
   RETENTION_CLEANUP = 'RETENTION_CLEANUP',
@@ -35,11 +40,20 @@ export enum AuditEventType {
   SERVER_START = 'SERVER_START',
   SERVER_STOP = 'SERVER_STOP',
   CONFIG_RELOAD = 'CONFIG_RELOAD',
+  SETTINGS_CHANGE = 'SETTINGS_CHANGE',
+  WEBSOCKET_CONNECT = 'WEBSOCKET_CONNECT',
+  WEBSOCKET_DISCONNECT = 'WEBSOCKET_DISCONNECT',
 
   // Error events
   ERROR_ENCRYPTION = 'ERROR_ENCRYPTION',
   ERROR_DATABASE = 'ERROR_DATABASE',
   ERROR_AUTHENTICATION = 'ERROR_AUTHENTICATION',
+  ERROR_VALIDATION = 'ERROR_VALIDATION',
+  ERROR_NOT_FOUND = 'ERROR_NOT_FOUND',
+
+  // Monitoring events
+  SECURITY_ALERT = 'SECURITY_ALERT',
+  HEALTH_CHECK = 'HEALTH_CHECK',
 }
 
 /**
@@ -77,15 +91,19 @@ export function getDefaultSeverity(eventType: AuditEventType): AuditSeverity {
     AuditEventType.ERROR_ENCRYPTION,
     AuditEventType.ERROR_DATABASE,
     AuditEventType.ERROR_AUTHENTICATION,
+    AuditEventType.ERROR_NOT_FOUND,
   ];
 
-  // Warning events (session expirations, backups)
+  // Warning events (session expirations, backups, settings changes)
   const warningEvents = [
     AuditEventType.AUTH_SESSION_EXPIRED,
     AuditEventType.BACKUP_CREATE,
     AuditEventType.BACKUP_DELETE,
     AuditEventType.RETENTION_CLEANUP,
     AuditEventType.CONFIG_RELOAD,
+    AuditEventType.SETTINGS_CHANGE,
+    AuditEventType.DATA_MODIFY,
+    AuditEventType.ERROR_VALIDATION,
   ];
 
   if (criticalEvents.includes(eventType)) {

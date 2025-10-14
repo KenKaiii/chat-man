@@ -13,25 +13,35 @@
   },
   "ui": {
     "appName": "Chat Man",
-    "welcomeMessage": "Welcome! I'm your local AI assistant. How can I help you today?",
+    "welcomeMessage": "Welcome! How can I help you today?",
     "placeholder": "Type a message...",
     "theme": "dark"
   },
   "retention": {
-    "enabled": false,
+    "enabled": true,
     "maxSessionAgeDays": 90,
-    "autoCleanupEnabled": false,
+    "autoCleanupEnabled": true,
     "cleanupSchedule": "daily"
   },
   "backup": {
-    "enabled": false,
-    "autoBackupEnabled": false,
+    "enabled": true,
+    "autoBackupEnabled": true,
     "autoBackupSchedule": "daily",
-    "keepLastN": 7
+    "keepLastN": 7,
+    "testBackupsEnabled": false,
+    "testBackupSchedule": "weekly"
   },
   "audit": {
     "enabled": true,
     "logToFile": true,
-    "logRetentionDays": 30
+    "logRetentionDays": 2190
+  },
+  "monitoring": {
+    "enabled": true,
+    "alertWebhookUrl": null,
+    "failedLoginThreshold": 5,
+    "backupRestoreThreshold": 2,
+    "checkIntervalMinutes": 5,
+    "retainAlertsForDays": 90
   }
 }

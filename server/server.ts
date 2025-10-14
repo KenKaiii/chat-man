@@ -26,6 +26,14 @@ import {
   handleAuthValidate,
   handleAuthStatus,
 } from './auth-api';
+import {
+  handleCreateDSRRequest,
+  handleListDSRRequests,
+  handleGetDSRRequest,
+  handleUpdateDSRRequest,
+  handleProcessDSRRequest,
+  handleGetDSRStatistics,
+} from './dsr-api';
 import { ensureEncryptionUnlocked } from './encryption/setupWizard';
 import { logAuditEvent } from './audit/auditLogger';
 import { AuditEventType } from './audit/auditEvents';
@@ -162,6 +170,213 @@ Bun.serve({
       }
     }
 
+    // Compliance Status: Check GDPR/HIPAA compliance requirements
+    if (url.pathname === '/api/compliance/status' && req.method === 'GET') {
+      try {
+        const { existsSync } = await import('fs');
+        const { join } = await import('path');
+        const { getKeyManager } = await import('./encryption/keyManager');
+        const { getAuditLogger } = await import('./audit/auditLogger');
+        const backupManager = getBackupManager();
+        const settings = await loadSettings();
+
+        // Check file existence
+        const files = {
+          securityDocs: existsSync(join(process.cwd(), 'required_files', 'SECURITY_REQUIREMENTS.md')),
+          privacyNotice: existsSync(join(process.cwd(), 'src', 'components', 'auth', 'PrivacyNotice.tsx')),
+          backupManager: existsSync(join(process.cwd(), 'server', 'backup', 'backupManager.ts')),
+          auditLogger: existsSync(join(process.cwd(), 'server', 'audit', 'auditLogger.ts')),
+          auditEvents: existsSync(join(process.cwd(), 'server', 'audit', 'auditEvents.ts')),
+        };
+
+        // Check encryption
+        const keyManager = getKeyManager();
+        const encryptionSetup = keyManager.isSetup();
+
+        // Check backup system
+        const backupDir = join(process.cwd(), 'backups');
+        const backupDirExists = existsSync(backupDir);
+        const backups = backupManager.listBackups();
+        const backupEnabled = settings.backup?.enabled || false;
+
+        // Check audit logging
+        const auditDir = join(process.cwd(), 'data', 'audit');
+        const auditDirExists = existsSync(auditDir);
+        const auditLogger = getAuditLogger();
+        const auditLogCount = auditLogger.getLogFileCount();
+
+        // Check retention policy
+        const retentionEnabled = settings.retention?.enabled || false;
+        const retentionDays = settings.retention?.maxSessionAgeDays || 0;
+
+        // Check GDPR rights implementation
+        const gdprRights = {
+          rightToAccess: true, // exportAllData() exists
+          rightToErasure: true, // deleteAllData() exists
+          rightToPortability: true, // exportAllData() returns JSON
+          storageLimitation: retentionEnabled,
+          privacyNotice: files.privacyNotice,
+        };
+
+        // Check HIPAA controls
+        const hipaaControls = {
+          encryption: encryptionSetup,
+          backupControls: backupEnabled && backupDirExists,
+          auditControls: auditDirExists && auditLogCount > 0,
+        };
+
+        const complianceStatus = {
+          files,
+          encryption: {
+            enabled: encryptionSetup,
+            status: encryptionSetup ? 'active' : 'not_configured',
+          },
+          backup: {
+            enabled: backupEnabled,
+            directoryExists: backupDirExists,
+            backupCount: backups.length,
+            hasBackups: backups.length > 0,
+            autoBackupEnabled: settings.backup?.autoBackupEnabled || false,
+            schedule: settings.backup?.autoBackupSchedule || 'daily',
+          },
+          audit: {
+            directoryExists: auditDirExists,
+            logFileCount: auditLogCount,
+            hasLogs: auditLogCount > 0,
+          },
+          retention: {
+            enabled: retentionEnabled,
+            maxSessionAgeDays: retentionDays,
+            autoCleanupEnabled: settings.retention?.autoCleanupEnabled || false,
+            schedule: settings.retention?.cleanupSchedule || 'daily',
+          },
+          gdpr: gdprRights,
+          hipaa: hipaaControls,
+          overallCompliance: {
+            filesComplete: Object.values(files).every(v => v),
+            encryptionActive: encryptionSetup,
+            backupActive: backupEnabled && backupDirExists,
+            auditActive: auditDirExists && auditLogCount > 0,
+            retentionConfigured: retentionEnabled,
+            gdprCompliant: Object.values(gdprRights).every(v => v),
+            hipaaCompliant: Object.values(hipaaControls).every(v => v),
+          },
+        };
+
+        return addCorsHeaders(Response.json(complianceStatus));
+      } catch (_error) {
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to check compliance status' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Audit Logs: Get audit logs with filtering
+    // GDPR Article 15 - Right to Access
+    // HIPAA §164.312(b) - Audit Controls
+    if (url.pathname === '/api/audit/logs' && req.method === 'GET') {
+      try {
+        const { getAuditLogger } = await import('./audit/auditLogger');
+        const auditLogger = getAuditLogger();
+
+        // Parse query parameters
+        const searchParams = url.searchParams;
+        const limit = parseInt(searchParams.get('limit') || '50');
+        const offset = parseInt(searchParams.get('offset') || '0');
+        const eventType = searchParams.get('eventType') || undefined;
+        const result = searchParams.get('result') as 'SUCCESS' | 'FAILURE' | undefined;
+        const severity = searchParams.get('severity') || undefined;
+        const startDate = searchParams.get('startDate') || undefined;
+        const endDate = searchParams.get('endDate') || undefined;
+        const searchTerm = searchParams.get('searchTerm') || undefined;
+
+        const { events, total } = auditLogger.readLogs({
+          limit: Math.min(limit, 100), // Cap at 100
+          offset,
+          eventType,
+          result,
+          severity: severity as any,
+          startDate,
+          endDate,
+          searchTerm,
+        });
+
+        return addCorsHeaders(Response.json({
+          events,
+          total,
+          limit: Math.min(limit, 100),
+          offset,
+        }));
+      } catch (error) {
+        logger.error('Failed to read audit logs', {
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to read audit logs' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Audit Logs: Get statistics
+    if (url.pathname === '/api/audit/stats' && req.method === 'GET') {
+      try {
+        const { getAuditLogger } = await import('./audit/auditLogger');
+        const auditLogger = getAuditLogger();
+        const stats = auditLogger.getStats();
+
+        return addCorsHeaders(Response.json(stats));
+      } catch (error) {
+        logger.error('Failed to get audit stats', {
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to get audit statistics' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Audit Logs: Export logs
+    // GDPR Article 15 - Right to Data Portability
+    if (url.pathname === '/api/audit/export' && req.method === 'GET') {
+      try {
+        const { getAuditLogger } = await import('./audit/auditLogger');
+        const auditLogger = getAuditLogger();
+
+        const searchParams = url.searchParams;
+        const startDate = searchParams.get('startDate') || undefined;
+        const endDate = searchParams.get('endDate') || undefined;
+
+        const exportJson = auditLogger.exportLogs(startDate, endDate);
+
+        // Audit log this export
+        logAuditEvent(AuditEventType.DATA_ACCESS, 'SUCCESS', {
+          action: 'audit_log_export',
+          startDate,
+          endDate,
+        });
+
+        const headers = new Headers();
+        headers.set('Content-Type', 'application/json');
+        headers.set('Content-Disposition', `attachment; filename="audit-logs-export-${new Date().toISOString().split('T')[0]}.json"`);
+
+        return addCorsHeaders(new Response(exportJson, {
+          status: 200,
+          headers,
+        }));
+      } catch (error) {
+        logger.error('Failed to export audit logs', {
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to export audit logs' },
+          { status: 500 }
+        ));
+      }
+    }
+
     // Authentication API Endpoints
     if (url.pathname === '/api/auth/setup' && req.method === 'POST') {
       return addCorsHeaders(await handleAuthSetup(req));
@@ -217,6 +432,13 @@ Bun.serve({
     // Session Management: Get all sessions
     if (url.pathname === '/api/sessions' && req.method === 'GET') {
       const sessions = db.getAllSessions();
+
+      // Audit log data access
+      logAuditEvent(AuditEventType.DATA_ACCESS, 'SUCCESS', {
+        action: 'list_sessions',
+        sessionCount: sessions.length,
+      });
+
       return addCorsHeaders(Response.json(sessions));
     }
 
@@ -224,6 +446,13 @@ Bun.serve({
     if (url.pathname === '/api/sessions' && req.method === 'POST') {
       const body = await req.json() as { mode?: 'general' | 'rag' | 'spark' | 'voice' };
       const session = db.createSession(body.mode);
+
+      // Audit log session creation
+      logAuditEvent(AuditEventType.SESSION_CREATE, 'SUCCESS', {
+        sessionId: session.id.substring(0, 8) + '...',
+        mode: session.mode,
+      });
+
       return addCorsHeaders(Response.json(session));
     }
 
@@ -234,6 +463,13 @@ Bun.serve({
       if (!session) {
         return addCorsHeaders(Response.json({ error: 'Session not found' }, { status: 404 }));
       }
+
+      // Audit log session view
+      logAuditEvent(AuditEventType.SESSION_VIEW, 'SUCCESS', {
+        sessionId: id.substring(0, 8) + '...',
+        action: 'view_session',
+      });
+
       return addCorsHeaders(Response.json(session));
     }
 
@@ -241,6 +477,14 @@ Bun.serve({
     if (url.pathname.match(/^\/api\/sessions\/[^/]+\/messages$/) && req.method === 'GET') {
       const id = url.pathname.split('/')[3];
       const messages = db.getMessages(id);
+
+      // Audit log data access
+      logAuditEvent(AuditEventType.DATA_ACCESS, 'SUCCESS', {
+        sessionId: id.substring(0, 8) + '...',
+        action: 'view_messages',
+        messageCount: messages.length,
+      });
+
       return addCorsHeaders(Response.json(messages));
     }
 
@@ -249,6 +493,13 @@ Bun.serve({
       const id = url.pathname.split('/').pop()!;
       const body = await req.json() as { title: string };
       db.updateSessionTitle(id, body.title);
+
+      // Audit log data modification
+      logAuditEvent(AuditEventType.DATA_MODIFY, 'SUCCESS', {
+        sessionId: id.substring(0, 8) + '...',
+        action: 'rename_session',
+      });
+
       return addCorsHeaders(Response.json({ success: true }));
     }
 
@@ -256,6 +507,12 @@ Bun.serve({
     if (url.pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === 'DELETE') {
       const id = url.pathname.split('/').pop()!;
       db.deleteSession(id);
+
+      // Audit log session deletion
+      logAuditEvent(AuditEventType.SESSION_DELETE, 'SUCCESS', {
+        sessionId: id.substring(0, 8) + '...',
+      });
+
       return addCorsHeaders(Response.json({ success: true }));
     }
 
@@ -467,12 +724,195 @@ Bun.serve({
       }
     }
 
+    // Backup: Verify backup
+    if (url.pathname.startsWith('/api/backup/verify/') && req.method === 'POST') {
+      try {
+        const backupId = url.pathname.split('/').pop();
+        if (!backupId) {
+          return addCorsHeaders(Response.json(
+            { error: 'Backup ID is required' },
+            { status: 400 }
+          ));
+        }
+
+        const backupManager = getBackupManager();
+        const result = backupManager.verifyBackup(backupId);
+
+        if (result.valid) {
+          logAuditEvent(AuditEventType.BACKUP_VERIFY, 'SUCCESS', { backupId, size: result.size });
+          return addCorsHeaders(Response.json({ success: true, ...result }));
+        } else {
+          logAuditEvent(AuditEventType.BACKUP_VERIFY, 'FAILURE', { backupId, error: result.error });
+          return addCorsHeaders(Response.json({ success: false, error: result.error }, { status: 500 }));
+        }
+      } catch (_error) {
+        return addCorsHeaders(Response.json({ error: 'Backup verification failed' }, { status: 500 }));
+      }
+    }
+
+    // Backup: Test restore
+    if (url.pathname.startsWith('/api/backup/test-restore/') && req.method === 'POST') {
+      try {
+        const backupId = url.pathname.split('/').pop();
+        if (!backupId) {
+          return addCorsHeaders(Response.json({ error: 'Backup ID is required' }, { status: 400 }));
+        }
+
+        const backupManager = getBackupManager();
+        const result = backupManager.testRestoreBackup(backupId);
+
+        if (result.success) {
+          logAuditEvent(AuditEventType.BACKUP_TEST_RESTORE, 'SUCCESS', { backupId, size: result.size });
+          return addCorsHeaders(Response.json(result));
+        } else {
+          logAuditEvent(AuditEventType.BACKUP_TEST_RESTORE, 'FAILURE', { backupId, error: result.error });
+          return addCorsHeaders(Response.json({ success: false, error: result.error }, { status: 500 }));
+        }
+      } catch (_error) {
+        return addCorsHeaders(Response.json({ error: 'Test restore failed' }, { status: 500 }));
+      }
+    }
+
+    // DSR: Create new DSR request (GDPR Articles 15-21)
+    if (url.pathname === '/api/dsr/requests' && req.method === 'POST') {
+      return addCorsHeaders(await handleCreateDSRRequest(req));
+    }
+
+    // DSR: List all DSR requests
+    if (url.pathname === '/api/dsr/requests' && req.method === 'GET') {
+      return addCorsHeaders(await handleListDSRRequests(req));
+    }
+
+    // DSR: Get specific DSR request
+    if (url.pathname.match(/^\/api\/dsr\/requests\/[^/]+$/) && req.method === 'GET') {
+      const requestId = url.pathname.split('/').pop();
+      if (requestId) {
+        return addCorsHeaders(await handleGetDSRRequest(requestId));
+      }
+    }
+
+    // DSR: Update DSR request status
+    if (url.pathname.match(/^\/api\/dsr\/requests\/[^/]+$/) && req.method === 'PATCH') {
+      const requestId = url.pathname.split('/').pop();
+      if (requestId) {
+        return addCorsHeaders(await handleUpdateDSRRequest(requestId, req));
+      }
+    }
+
+    // DSR: Process DSR request (auto-execute based on type)
+    if (url.pathname.match(/^\/api\/dsr\/requests\/[^/]+\/process$/) && req.method === 'POST') {
+      const requestId = url.pathname.split('/')[4];
+      if (requestId) {
+        return addCorsHeaders(await handleProcessDSRRequest(requestId));
+      }
+    }
+
+    // DSR: Get DSR statistics
+    if (url.pathname === '/api/dsr/statistics' && req.method === 'GET') {
+      return addCorsHeaders(await handleGetDSRStatistics());
+    }
+
+    // Health: Detailed health check
+    if (url.pathname === '/api/health/detailed' && req.method === 'GET') {
+      try {
+        const { getHealthChecker } = await import('./monitoring/healthCheck');
+        const healthChecker = getHealthChecker();
+        const healthResult = await healthChecker.performHealthCheck();
+
+        return addCorsHeaders(Response.json(healthResult));
+      } catch (error) {
+        logger.error('Health check failed', { error: error instanceof Error ? error.message : 'Unknown' });
+        return addCorsHeaders(Response.json({ error: 'Health check failed' }, { status: 500 }));
+      }
+    }
+
+    // Security: Get security alerts
+    if (url.pathname === '/api/security/alerts' && req.method === 'GET') {
+      try {
+        const settings = await loadSettings();
+        if (!settings.monitoring?.enabled) {
+          return addCorsHeaders(Response.json({ error: 'Monitoring not enabled' }, { status: 400 }));
+        }
+
+        const { getAlertManager } = await import('./monitoring/alertManager');
+        const alertManager = getAlertManager(settings.monitoring);
+
+        const searchParams = url.searchParams;
+        const limit = parseInt(searchParams.get('limit') || '50');
+        const severity = searchParams.get('severity') as any;
+        const type = searchParams.get('type') as any;
+        const resolved = searchParams.get('resolved') === 'true' ? true : searchParams.get('resolved') === 'false' ? false : undefined;
+
+        const alerts = alertManager.getAlerts({ limit, severity, type, resolved });
+
+        return addCorsHeaders(Response.json({ alerts, count: alerts.length }));
+      } catch (error) {
+        logger.error('Failed to get security alerts', { error: error instanceof Error ? error.message : 'Unknown' });
+        return addCorsHeaders(Response.json({ error: 'Failed to get alerts' }, { status: 500 }));
+      }
+    }
+
+    // Security: Get security metrics
+    if (url.pathname === '/api/security/metrics' && req.method === 'GET') {
+      try {
+        const settings = await loadSettings();
+        if (!settings.monitoring?.enabled) {
+          return addCorsHeaders(Response.json({ error: 'Monitoring not enabled' }, { status: 400 }));
+        }
+
+        const { getSecurityMonitor } = await import('./monitoring/securityMonitor');
+        const securityMonitor = getSecurityMonitor(settings.monitoring);
+        const metrics = await securityMonitor.getSecurityMetrics();
+
+        return addCorsHeaders(Response.json(metrics));
+      } catch (error) {
+        logger.error('Failed to get security metrics', { error: error instanceof Error ? error.message : 'Unknown' });
+        return addCorsHeaders(Response.json({ error: 'Failed to get metrics' }, { status: 500 }));
+      }
+    }
+
+    // Metrics: Get system metrics
+    if (url.pathname === '/api/metrics' && req.method === 'GET') {
+      try {
+        const { getMetricsCollector } = await import('./monitoring/metrics');
+        const metrics = getMetricsCollector().getMetrics();
+
+        return addCorsHeaders(Response.json(metrics));
+      } catch (error) {
+        logger.error('Failed to get metrics', { error: error instanceof Error ? error.message : 'Unknown' });
+        return addCorsHeaders(Response.json({ error: 'Failed to get metrics' }, { status: 500 }));
+      }
+    }
+
+    // Metrics: Prometheus format
+    if (url.pathname === '/api/metrics/prometheus' && req.method === 'GET') {
+      try {
+        const { getMetricsCollector } = await import('./monitoring/metrics');
+        const prometheusMetrics = getMetricsCollector().getPrometheusMetrics();
+
+        return new Response(prometheusMetrics, {
+          headers: new Headers({
+            'Content-Type': 'text/plain; version=0.0.4',
+            'Access-Control-Allow-Origin': '*',
+          }),
+        });
+      } catch (error) {
+        logger.error('Failed to get Prometheus metrics', { error: error instanceof Error ? error.message : 'Unknown' });
+        return addCorsHeaders(Response.json({ error: 'Failed to get metrics' }, { status: 500 }));
+      }
+    }
+
     return new Response('Not found', { status: 404 });
   },
 
   websocket: {
     open(_ws: ServerWebSocket) {
       logger.info('WebSocket client connected');
+
+      // Audit log WebSocket connection
+      logAuditEvent(AuditEventType.WEBSOCKET_CONNECT, 'SUCCESS', {
+        action: 'websocket_open',
+      });
     },
 
     async message(ws: ServerWebSocket, message: string | Buffer) {
@@ -495,6 +935,11 @@ Bun.serve({
 
     close(_ws: ServerWebSocket) {
       logger.info('WebSocket client disconnected');
+
+      // Audit log WebSocket disconnection
+      logAuditEvent(AuditEventType.WEBSOCKET_DISCONNECT, 'SUCCESS', {
+        action: 'websocket_close',
+      });
     },
   },
 });
@@ -543,6 +988,13 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
   let session = db.getSession(sessionId);
   if (!session) {
     session = db.createSession(data.mode || 'general');
+
+    // Audit log session creation (WebSocket)
+    logAuditEvent(AuditEventType.SESSION_CREATE, 'SUCCESS', {
+      sessionId: session.id.substring(0, 8) + '...',
+      mode: session.mode,
+      via: 'websocket',
+    });
   }
 
   // Load mode-specific system context for this session
@@ -783,6 +1235,66 @@ function handleStopGeneration(data: StopGenerationMessage) {
     });
     logger.error('Cannot start server without encryption. Exiting...');
     process.exit(1);
+  }
+
+  // SECURITY: Verify file permissions for sensitive files
+  try {
+    const { stat } = await import('fs/promises');
+    const { join } = await import('path');
+
+    const sensitiveFiles = [
+      join(process.cwd(), 'config', '.auth'),
+      join(process.cwd(), 'config', '.encryption_salt'),
+    ];
+
+    for (const filePath of sensitiveFiles) {
+      try {
+        const stats = await stat(filePath);
+        const permissions = (stats.mode & 0o777).toString(8);
+
+        // Check if file is readable by others (should be 600 or 400)
+        if (parseInt(permissions, 8) & 0o077) {
+          logger.warn('Insecure file permissions detected', {
+            file: filePath,
+            permissions,
+            expected: '600',
+          });
+
+          // Fix permissions automatically
+          const { chmod } = await import('fs/promises');
+          await chmod(filePath, 0o600);
+          logger.info('Fixed file permissions', {
+            file: filePath,
+            newPermissions: '600',
+          });
+        } else {
+          logger.debug('File permissions verified', {
+            file: filePath,
+            permissions,
+          });
+        }
+      } catch (_error) {
+        // File doesn't exist yet (first run) - this is okay
+        logger.debug('Sensitive file not found (may be first run)', {
+          file: filePath,
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to verify file permissions', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+  }
+
+  // SECURITY: Verify filesystem encryption (HIPAA §164.312(a)(2)(iv))
+  try {
+    const { verifyEncryptionOrWarn } = await import('./utils/encryptionVerifier');
+    await verifyEncryptionOrWarn();
+  } catch (error) {
+    logger.error('Failed to verify filesystem encryption', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+    // Continue startup - verifyEncryptionOrWarn handles warnings
   }
 
   // Initialize database (after encryption is ready)

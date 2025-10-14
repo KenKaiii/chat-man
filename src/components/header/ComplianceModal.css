@@ -1,0 +1,118 @@
+/**
+ * Compliance Modal Styles
+ * Copyright (C) 2025 KenKai
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+.compliance-modal {
+  max-width: 700px;
+  max-height: 90vh;
+}
+
+.compliance-disclaimer {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(255, 165, 0, 0.1);
+  border: 1px solid rgb(var(--orange-accent));
+  border-radius: 8px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.compliance-disclaimer strong {
+  color: rgb(var(--orange-accent));
+  display: block;
+  margin-bottom: 8px;
+}
+
+.compliance-disclaimer p {
+  margin: 0;
+  color: rgb(var(--text-secondary));
+}
+
+.compliance-section {
+  margin-bottom: 24px;
+}
+
+.compliance-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgb(var(--text-primary));
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(var(--text-secondary), 0.2);
+}
+
+.compliance-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.compliance-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: rgba(var(--surface), 0.5);
+  border-radius: 6px;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+
+.compliance-item:hover {
+  background: rgba(var(--surface), 0.8);
+}
+
+.compliance-item span {
+  color: rgb(var(--text-primary));
+  flex: 1;
+}
+
+.compliance-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(var(--text-secondary), 0.2);
+}
+
+.refresh-button {
+  padding: 10px 20px;
+  background: rgb(var(--blue-accent));
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.refresh-button:hover {
+  opacity: 0.9;
+}
+
+.refresh-button:active {
+  opacity: 0.8;
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 16px;
+  color: rgb(var(--text-secondary));
+}
+
+.error-state {
+  color: rgb(var(--red-accent));
+}
