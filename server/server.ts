@@ -17,6 +17,7 @@ import { retrieveContext } from './rag/retriever';
 import { SessionDatabase } from './database';
 import { logger } from './utils/secureLogger';
 import { authenticateWebSocket, isAuthenticationRequired, authMiddleware } from './auth/middleware';
+import { getBackupManager } from './backup/backupManager';
 import {
   handleAuthSetup,
   handleAuthLogin,
@@ -26,6 +27,8 @@ import {
   handleAuthStatus,
 } from './auth-api';
 import { ensureEncryptionUnlocked } from './encryption/setupWizard';
+import { logAuditEvent } from './audit/auditLogger';
+import { AuditEventType } from './audit/auditEvents';
 
 const PORT = process.env.PORT || 3001;
 
@@ -254,6 +257,214 @@ Bun.serve({
       const id = url.pathname.split('/').pop()!;
       db.deleteSession(id);
       return addCorsHeaders(Response.json({ success: true }));
+    }
+
+    // Data Management: Export all data (GDPR Right to Data Portability)
+    if (url.pathname === '/api/data/export' && req.method === 'GET') {
+      const exportData = db.exportAllData();
+
+      // Audit log
+      logAuditEvent(AuditEventType.DATA_EXPORT, 'SUCCESS', {
+        sessionCount: exportData.metadata.totalSessions,
+        messageCount: exportData.metadata.totalMessages,
+      });
+
+      // Set headers for file download
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      headers.set('Content-Disposition', `attachment; filename="chat-man-export-${new Date().toISOString().split('T')[0]}.json"`);
+
+      const corsResponse = addCorsHeaders(new Response(JSON.stringify(exportData, null, 2), {
+        status: 200,
+        headers,
+      }));
+
+      return corsResponse;
+    }
+
+    // Data Management: Delete all data (GDPR Right to Erasure)
+    if (url.pathname === '/api/data/delete-all' && req.method === 'DELETE') {
+      // Audit log before deletion
+      logAuditEvent(AuditEventType.DATA_DELETE_ALL, 'SUCCESS');
+
+      db.deleteAllData();
+      return addCorsHeaders(Response.json({
+        success: true,
+        message: 'All user data has been permanently deleted',
+      }));
+    }
+
+    // Retention Policy: Get status
+    if (url.pathname === '/api/retention/status' && req.method === 'GET') {
+      try {
+        const settings = await loadSettings();
+        const retentionEnabled = settings.retention?.enabled || false;
+        const retentionDays = settings.retention?.maxSessionAgeDays || 90;
+        const expiredSessions = retentionEnabled ? db.getExpiredSessions(retentionDays) : [];
+
+        return addCorsHeaders(Response.json({
+          enabled: retentionEnabled,
+          maxSessionAgeDays: retentionDays,
+          autoCleanupEnabled: settings.retention?.autoCleanupEnabled || false,
+          cleanupSchedule: settings.retention?.cleanupSchedule || 'daily',
+          expiredCount: expiredSessions.length,
+        }));
+      } catch (_error) {
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to get retention status' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Retention Policy: Manual cleanup
+    if (url.pathname === '/api/retention/cleanup' && req.method === 'POST') {
+      try {
+        const settings = await loadSettings();
+        if (!settings.retention?.enabled) {
+          return addCorsHeaders(Response.json(
+            { error: 'Retention policy is not enabled' },
+            { status: 400 }
+          ));
+        }
+
+        const retentionDays = settings.retention.maxSessionAgeDays;
+        const deletedCount = db.deleteExpiredSessions(retentionDays);
+
+        // Audit log
+        logAuditEvent(AuditEventType.RETENTION_CLEANUP, 'SUCCESS', { deletedCount, retentionDays });
+
+        return addCorsHeaders(Response.json({
+          success: true,
+          deletedCount,
+          message: `Deleted ${deletedCount} expired session(s)`,
+        }));
+      } catch (_error) {
+        logAuditEvent(AuditEventType.RETENTION_CLEANUP, 'FAILURE');
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to run cleanup' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Backup: Create backup
+    if (url.pathname === '/api/backup/create' && req.method === 'POST') {
+      try {
+        const backupManager = getBackupManager();
+        const metadata = backupManager.createBackup();
+
+        // Audit log
+        logAuditEvent(AuditEventType.BACKUP_CREATE, 'SUCCESS', { backupId: metadata.id, size: metadata.size });
+
+        return addCorsHeaders(Response.json({
+          success: true,
+          backup: metadata,
+          message: 'Backup created successfully',
+        }));
+      } catch (_error) {
+        logAuditEvent(AuditEventType.BACKUP_CREATE, 'FAILURE');
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to create backup' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Backup: List backups
+    if (url.pathname === '/api/backup/list' && req.method === 'GET') {
+      try {
+        const backupManager = getBackupManager();
+        const backups = backupManager.listBackups();
+        const totalSize = backupManager.getTotalBackupSize();
+
+        return addCorsHeaders(Response.json({
+          backups,
+          totalSize,
+          count: backups.length,
+        }));
+      } catch (_error) {
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to list backups' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Backup: Restore backup
+    if (url.pathname.startsWith('/api/backup/restore/') && req.method === 'POST') {
+      try {
+        const backupId = url.pathname.split('/').pop();
+        if (!backupId) {
+          return addCorsHeaders(Response.json(
+            { error: 'Backup ID is required' },
+            { status: 400 }
+          ));
+        }
+
+        const backupManager = getBackupManager();
+        const success = backupManager.restoreBackup(backupId);
+
+        if (success) {
+          // Audit log
+          logAuditEvent(AuditEventType.BACKUP_RESTORE, 'SUCCESS', { backupId });
+
+          return addCorsHeaders(Response.json({
+            success: true,
+            message: 'Backup restored successfully. Please reload the application.',
+          }));
+        } else {
+          logAuditEvent(AuditEventType.BACKUP_RESTORE, 'FAILURE', { backupId });
+          return addCorsHeaders(Response.json(
+            { error: 'Failed to restore backup' },
+            { status: 500 }
+          ));
+        }
+      } catch (_error) {
+        logAuditEvent(AuditEventType.BACKUP_RESTORE, 'FAILURE');
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to restore backup' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // Backup: Delete backup
+    if (url.pathname.startsWith('/api/backup/') && url.pathname.split('/').length === 4 && req.method === 'DELETE') {
+      try {
+        const backupId = url.pathname.split('/').pop();
+        if (!backupId) {
+          return addCorsHeaders(Response.json(
+            { error: 'Backup ID is required' },
+            { status: 400 }
+          ));
+        }
+
+        const backupManager = getBackupManager();
+        const success = backupManager.deleteBackup(backupId);
+
+        if (success) {
+          // Audit log
+          logAuditEvent(AuditEventType.BACKUP_DELETE, 'SUCCESS', { backupId });
+
+          return addCorsHeaders(Response.json({
+            success: true,
+            message: 'Backup deleted successfully',
+          }));
+        } else {
+          logAuditEvent(AuditEventType.BACKUP_DELETE, 'FAILURE', { backupId });
+          return addCorsHeaders(Response.json(
+            { error: 'Backup not found' },
+            { status: 404 }
+          ));
+        }
+      } catch (_error) {
+        logAuditEvent(AuditEventType.BACKUP_DELETE, 'FAILURE');
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to delete backup' },
+          { status: 500 }
+        ));
+      }
     }
 
     return new Response('Not found', { status: 404 });
@@ -586,6 +797,97 @@ function handleStopGeneration(data: StopGenerationMessage) {
     process.exit(1);
   }
 
+  // Set up data retention policy (GDPR Article 5.1.e - Storage Limitation)
+  try {
+    const settings = await loadSettings();
+    if (settings.retention?.enabled) {
+      const retentionDays = settings.retention.maxSessionAgeDays;
+
+      // Run cleanup function
+      const runCleanup = () => {
+        logger.info('Running retention cleanup', { retentionDays });
+        const deletedCount = db.deleteExpiredSessions(retentionDays);
+        if (deletedCount > 0) {
+          logger.info('Retention cleanup completed', { deletedCount });
+        }
+      };
+
+      // Run cleanup immediately on startup
+      runCleanup();
+
+      // Set up scheduled cleanup if enabled
+      if (settings.retention.autoCleanupEnabled) {
+        const scheduleMap: Record<string, number> = {
+          'daily': 24 * 60 * 60 * 1000,     // 24 hours
+          'weekly': 7 * 24 * 60 * 60 * 1000, // 7 days
+        };
+        const interval = scheduleMap[settings.retention.cleanupSchedule] || scheduleMap['daily'];
+
+        setInterval(runCleanup, interval);
+        logger.info('Scheduled retention cleanup enabled', {
+          schedule: settings.retention.cleanupSchedule,
+          intervalMs: interval,
+        });
+      }
+    } else {
+      logger.info('Data retention policy disabled');
+    }
+  } catch (error) {
+    logger.warn('Failed to set up retention policy', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+  }
+
+  // Set up encrypted backup system (HIPAA §164.308(a)(7)(ii)(A) - Backup Controls)
+  try {
+    const settings = await loadSettings();
+    if (settings.backup?.enabled) {
+      const backupManager = getBackupManager();
+      const keepLastN = settings.backup.keepLastN;
+
+      // Run backup and cleanup function
+      const runBackup = () => {
+        logger.info('Running scheduled backup');
+        try {
+          const metadata = backupManager.createBackup();
+          logger.info('Scheduled backup created', { id: metadata.id });
+
+          // Clean up old backups
+          const deletedCount = backupManager.deleteOldBackups(keepLastN);
+          if (deletedCount > 0) {
+            logger.info('Cleaned up old backups', { deletedCount, keepLastN });
+          }
+        } catch (error) {
+          logger.error('Scheduled backup failed', {
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+        }
+      };
+
+      // Set up scheduled backups if enabled
+      if (settings.backup.autoBackupEnabled) {
+        const scheduleMap: Record<string, number> = {
+          'daily': 24 * 60 * 60 * 1000,     // 24 hours
+          'weekly': 7 * 24 * 60 * 60 * 1000, // 7 days
+        };
+        const interval = scheduleMap[settings.backup.autoBackupSchedule] || scheduleMap['daily'];
+
+        setInterval(runBackup, interval);
+        logger.info('Scheduled backups enabled', {
+          schedule: settings.backup.autoBackupSchedule,
+          keepLastN,
+          intervalMs: interval,
+        });
+      }
+    } else {
+      logger.info('Backup system disabled');
+    }
+  } catch (error) {
+    logger.warn('Failed to set up backup system', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+  }
+
   // Load configuration
   try {
     await buildSystemContext();
@@ -625,3 +927,6 @@ function handleStopGeneration(data: StopGenerationMessage) {
 
 logger.info('Server running', { port: PORT });
 logger.info('WebSocket endpoint', { endpoint: `ws://localhost:${PORT}/ws` });
+
+// Audit log server startup
+logAuditEvent(AuditEventType.SERVER_START, 'SUCCESS', { port: PORT });

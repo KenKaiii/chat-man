@@ -1,1 +1,44 @@
+# Dependencies
 node_modules
+
+# Sensitive Configuration Files (NEVER commit these)
+config/.auth
+config/.auth.backup
+config/.encryption_salt
+
+# User Data (GDPR/HIPAA Protected)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Vector Databases
+*.lance/
+
+# Backups
+backups/
+*.backup
+
+# Development
+.dev-pids
+.DS_Store
+
+# Build outputs
+dist/
+dist-server/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db

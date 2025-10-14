@@ -11,6 +11,7 @@ import { NewChatWelcome } from "./components/chat/NewChatWelcome";
 import { ChatContainer } from "./components/chat/ChatContainer";
 import { RAGButton } from "./components/header/RAGButton";
 import { RAGModal } from "./components/rag/RAGModal";
+import { AboutButton } from "./components/header/AboutButton";
 import { Toaster } from "sonner";
 import { Menu, Edit3 } from "lucide-react";
 import { useSessionAPI, type Session } from "./hooks/useSessionAPI";
@@ -202,9 +203,10 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Right side - RAG Documents button */}
+                {/* Right side - RAG Documents & About buttons */}
                 <div className="header-right">
                   <RAGButton onClick={() => setIsRAGModalOpen(true)} />
+                  <AboutButton />
                 </div>
               </div>
             </div>

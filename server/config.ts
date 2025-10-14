@@ -29,10 +29,33 @@ export interface UIConfig {
   theme: string;
 }
 
+export interface RetentionConfig {
+  enabled: boolean;
+  maxSessionAgeDays: number;
+  autoCleanupEnabled: boolean;
+  cleanupSchedule: string;
+}
+
+export interface BackupConfig {
+  enabled: boolean;
+  autoBackupEnabled: boolean;
+  autoBackupSchedule: string;
+  keepLastN: number;
+}
+
+export interface AuditConfig {
+  enabled: boolean;
+  logToFile: boolean;
+  logRetentionDays: number;
+}
+
 export interface Settings {
   model: ModelConfig;
   system: SystemConfig;
   ui: UIConfig;
+  retention?: RetentionConfig;
+  backup?: BackupConfig;
+  audit?: AuditConfig;
 }
 
 /**
@@ -79,7 +102,29 @@ export async function loadSettings(): Promise<Settings> {
   try {
     const path = join(CONFIG_DIR, 'settings.json');
     const content = await readFile(path, 'utf-8');
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+
+    // Provide defaults for new config sections if not present
+    return {
+      ...parsed,
+      retention: parsed.retention || {
+        enabled: false,
+        maxSessionAgeDays: 90,
+        autoCleanupEnabled: false,
+        cleanupSchedule: 'daily',
+      },
+      backup: parsed.backup || {
+        enabled: false,
+        autoBackupEnabled: false,
+        autoBackupSchedule: 'daily',
+        keepLastN: 7,
+      },
+      audit: parsed.audit || {
+        enabled: true,
+        logToFile: true,
+        logRetentionDays: 30,
+      },
+    };
   } catch (_error) {
     console.warn('⚠️  Could not load settings.json, using defaults');
     return {
@@ -100,6 +145,23 @@ export async function loadSettings(): Promise<Settings> {
         welcomeMessage: 'Welcome! How can I help you today?',
         placeholder: 'Type a message...',
         theme: 'dark',
+      },
+      retention: {
+        enabled: false,
+        maxSessionAgeDays: 90,
+        autoCleanupEnabled: false,
+        cleanupSchedule: 'daily',
+      },
+      backup: {
+        enabled: false,
+        autoBackupEnabled: false,
+        autoBackupSchedule: 'daily',
+        keepLastN: 7,
+      },
+      audit: {
+        enabled: true,
+        logToFile: true,
+        logRetentionDays: 30,
       },
     };
   }

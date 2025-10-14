@@ -236,6 +236,139 @@ export class SessionDatabase {
   }
 
   /**
+   * Get all messages across all sessions (for export)
+   */
+  getAllMessages(): Message[] {
+    const rows = this.db.query(
+      'SELECT * FROM messages ORDER BY timestamp ASC'
+    ).all() as DBMessage[];
+
+    return rows.map((row) => {
+      const content = JSON.parse(row.content);
+
+      return {
+        id: row.id,
+        type: row.type as 'user' | 'assistant',
+        content,
+        timestamp: row.timestamp,
+      } as Message;
+    });
+  }
+
+  /**
+   * Export all user data (GDPR Article 20 - Right to Data Portability)
+   * Returns complete data set in JSON format
+   */
+  exportAllData(): {
+    metadata: {
+      exportDate: string;
+      version: string;
+      totalSessions: number;
+      totalMessages: number;
+    };
+    sessions: Session[];
+    messages: Array<Message & { session_id: string }>;
+  } {
+    const sessions = this.getAllSessions();
+    const messagesRaw = this.db.query(
+      'SELECT * FROM messages ORDER BY timestamp ASC'
+    ).all() as DBMessage[];
+
+    const messages = messagesRaw.map((row) => {
+      const content = JSON.parse(row.content);
+      return {
+        id: row.id,
+        session_id: row.session_id,
+        type: row.type as 'user' | 'assistant',
+        content,
+        timestamp: row.timestamp,
+      } as any;
+    }) as Array<Message & { session_id: string }>;
+
+    logger.info('Exported all user data', {
+      sessionCount: sessions.length,
+      messageCount: messages.length,
+    });
+
+    return {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        version: '1.0.0',
+        totalSessions: sessions.length,
+        totalMessages: messages.length,
+      },
+      sessions,
+      messages,
+    };
+  }
+
+  /**
+   * Delete all user data (GDPR Article 17 - Right to Erasure)
+   * Permanently removes all sessions and messages
+   */
+  deleteAllData(): void {
+    logger.warn('Deleting all user data (right to erasure)');
+
+    // Delete all messages first
+    this.db.run('DELETE FROM messages');
+
+    // Delete all sessions
+    this.db.run('DELETE FROM sessions');
+
+    // Vacuum database to reclaim space
+    this.db.run('VACUUM');
+
+    logger.info('All user data deleted and database vacuumed');
+  }
+
+  /**
+   * Get session age in days
+   * Used for retention policy enforcement
+   */
+  getSessionAge(sessionId: string): number {
+    const session = this.getSession(sessionId);
+    if (!session) return 0;
+
+    const updatedAt = new Date(session.updated_at);
+    const now = new Date();
+    const diffMs = now.getTime() - updatedAt.getTime();
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  }
+
+  /**
+   * Get sessions that exceed retention period
+   * (GDPR Article 5.1.e - Storage Limitation)
+   */
+  getExpiredSessions(retentionDays: number): Session[] {
+    const sessions = this.getAllSessions();
+    return sessions.filter(session => this.getSessionAge(session.id) > retentionDays);
+  }
+
+  /**
+   * Delete sessions older than retention period
+   * (GDPR Article 5.1.e - Storage Limitation)
+   * Returns number of sessions deleted
+   */
+  deleteExpiredSessions(retentionDays: number): number {
+    const expiredSessions = this.getExpiredSessions(retentionDays);
+    let deletedCount = 0;
+
+    for (const session of expiredSessions) {
+      this.deleteSession(session.id);
+      deletedCount++;
+    }
+
+    if (deletedCount > 0) {
+      logger.info('Retention cleanup completed', {
+        deletedCount,
+        retentionDays
+      });
+    }
+
+    return deletedCount;
+  }
+
+  /**
    * Close database connection
    */
   close(): void {

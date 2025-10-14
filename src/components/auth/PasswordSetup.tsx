@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { PrivacyNotice } from './PrivacyNotice';
 
 export const PasswordSetup: React.FC = () => {
   const { setupPassword } = useAuth();
@@ -19,6 +20,7 @@ export const PasswordSetup: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [understood, setUnderstood] = useState(false);
   const [showRequirements, setShowRequirements] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   // Password strength validation
   const validatePassword = (pwd: string): string[] => {
@@ -85,11 +87,20 @@ export const PasswordSetup: React.FC = () => {
             Chat Man
           </h1>
           <p style={{ color: 'rgb(var(--text-secondary))', fontSize: '0.8125rem', marginTop: '0.375rem' }}>
-            Set up your secure password
+            {!privacyAccepted ? 'Privacy Notice & Data Processing' : 'Set up your secure password'}
           </p>
         </div>
 
-        {/* Setup Form */}
+        {/* Privacy Notice (shown first) */}
+        {!privacyAccepted && (
+          <PrivacyNotice
+            onAccept={() => setPrivacyAccepted(true)}
+            compact={true}
+          />
+        )}
+
+        {/* Setup Form (shown after privacy accepted) */}
+        {privacyAccepted && (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
           {/* Password Input */}
           <div style={{ position: 'relative' }}>
@@ -273,48 +284,53 @@ export const PasswordSetup: React.FC = () => {
             {isSubmitting ? 'Setting up...' : 'Set Password'}
           </button>
         </form>
+        )}
 
-        {/* Security Notice - Compact & Collapsible */}
-        <button
-          type="button"
-          onClick={() => setShowRequirements(!showRequirements)}
-          style={{
-            backgroundColor: 'rgba(245, 158, 11, 0.08)',
-            border: '1px solid rgba(245, 158, 11, 0.2)',
-            borderRadius: '0.5rem',
-            padding: '0.625rem 0.75rem',
-            fontSize: '0.75rem',
-            color: '#FCD34D',
-            cursor: 'pointer',
-            textAlign: 'left',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            transition: 'all 0.15s'
-          }}
-        >
-          <AlertTriangle style={{ width: '0.875rem', height: '0.875rem', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>
-            {showRequirements ? 'Hide security notice' : 'Password encrypts all data • Cannot be recovered if lost'}
-          </span>
-        </button>
+        {/* Security Notice - Compact & Collapsible (only shown when form is visible) */}
+        {privacyAccepted && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowRequirements(!showRequirements)}
+              style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.2)',
+                borderRadius: '0.5rem',
+                padding: '0.625rem 0.75rem',
+                fontSize: '0.75rem',
+                color: '#FCD34D',
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                transition: 'all 0.15s'
+              }}
+            >
+              <AlertTriangle style={{ width: '0.875rem', height: '0.875rem', flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>
+                {showRequirements ? 'Hide security notice' : 'Password encrypts all data • Cannot be recovered if lost'}
+              </span>
+            </button>
 
-        {showRequirements && (
-          <div style={{
-            backgroundColor: 'rgba(245, 158, 11, 0.05)',
-            border: '1px solid rgba(245, 158, 11, 0.15)',
-            borderRadius: '0.5rem',
-            padding: '0.75rem',
-            fontSize: '0.75rem',
-            color: '#FCD34D',
-            marginTop: '-0.75rem'
-          }}>
-            <ul style={{ listStyle: 'disc', paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <li>Use a password manager (1Password, Bitwarden)</li>
-              <li>This app is HIPAA/GDPR compliant</li>
-              <li>Data is encrypted end-to-end</li>
-            </ul>
-          </div>
+            {showRequirements && (
+              <div style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                border: '1px solid rgba(245, 158, 11, 0.15)',
+                borderRadius: '0.5rem',
+                padding: '0.75rem',
+                fontSize: '0.75rem',
+                color: '#FCD34D',
+                marginTop: '-0.75rem'
+              }}>
+                <ul style={{ listStyle: 'disc', paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <li>Use a password manager (1Password, Bitwarden)</li>
+                  <li>This app is HIPAA/GDPR compliant</li>
+                  <li>Data is encrypted end-to-end</li>
+                </ul>
+              </div>
+            )}
+          </>
         )}
 
         {/* Footer - Compact */}

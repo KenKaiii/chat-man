@@ -16,5 +16,22 @@
     "welcomeMessage": "Welcome! I'm your local AI assistant. How can I help you today?",
     "placeholder": "Type a message...",
     "theme": "dark"
+  },
+  "retention": {
+    "enabled": false,
+    "maxSessionAgeDays": 90,
+    "autoCleanupEnabled": false,
+    "cleanupSchedule": "daily"
+  },
+  "backup": {
+    "enabled": false,
+    "autoBackupEnabled": false,
+    "autoBackupSchedule": "daily",
+    "keepLastN": 7
+  },
+  "audit": {
+    "enabled": true,
+    "logToFile": true,
+    "logRetentionDays": 30
   }
 }
