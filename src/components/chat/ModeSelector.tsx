@@ -95,11 +95,14 @@ export function ModeSelector({ selectedMode, onSelectMode }: ModeSelectorProps) 
                   : 'border-b-2 border-white/10 hover:border-white/20 text-white/90 hover:text-white transition'
               }`}
               style={{
-              animationDelay: `${index * 60}ms`,
               ...(isSelected ? {
-                background: mode.gradient,
+                backgroundImage: mode.gradient,
                 backgroundSize: '200% auto',
-                animation: 'shimmer 3s linear infinite',
+                animationName: 'shimmer',
+                animationDuration: '3s',
+                animationTimingFunction: 'linear',
+                animationIterationCount: 'infinite',
+                animationDelay: `${index * 60}ms`,
                 opacity: 1,
               } : {
                 backgroundColor: 'rgb(38, 40, 42)', // #26282A

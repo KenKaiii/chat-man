@@ -72,9 +72,12 @@ export function ModeIndicator({ mode, onWidthChange }: ModeIndicatorProps) {
           ref={buttonRef}
           className="flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-lg"
           style={{
-            background: config.gradient,
+            backgroundImage: config.gradient,
             backgroundSize: '200% auto',
-            animation: 'shimmer 3s linear infinite',
+            animationName: 'shimmer',
+            animationDuration: '3s',
+            animationTimingFunction: 'linear',
+            animationIterationCount: 'infinite',
             color: config.textColor,
             border: 'none',
             cursor: 'default',
