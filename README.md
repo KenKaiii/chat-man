@@ -2,35 +2,37 @@
 
 A HIPAA/GDPR-compliant AI chat application with Ollama integration, RAG support, and beautiful UI.
 
-## 🚀 Quick Install
+## 🚀 Quick Start
 
-**One command. Zero configuration needed:**
+**Clone and run in 30 seconds:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kenkai/chat-man/main/install.sh | bash
+# Clone the repository
+git clone https://github.com/KenKaiii/chat-man.git
+cd chat-man
+
+# Install dependencies
+bun install
+
+# Build frontend
+bun run build
+
+# Start the app
+export CHAT_MAN_PASSWORD='your-secure-password'
+export NODE_ENV=production
+bun run dev:server
 ```
 
-**What it does:**
-- ✅ Detects your OS (macOS, Linux, WSL)
-- ✅ Installs Ollama (if needed)
-- ✅ Downloads Agent Man binary
-- ✅ Sets up encryption
-- ✅ Adds to PATH
-- ✅ Ready to use in 30 seconds
+Then open: http://localhost:3010
 
 **Supported Platforms:**
 - macOS (Apple Silicon & Intel)
 - Linux (x86_64)
 - WSL (Windows Subsystem for Linux)
 
-**Run it:**
-```bash
-export CHAT_MAN_PASSWORD='your-password'
-export NODE_ENV=production
-agent-man
-```
-
-Then open: http://localhost:3010
+**Requirements:**
+- [Bun](https://bun.sh) runtime
+- [Ollama](https://ollama.ai) (for local AI models)
 
 ---
 
