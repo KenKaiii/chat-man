@@ -6,16 +6,235 @@
  */
 
 import { getDSRWorkflowManager, DSRType, DSRStatus } from './compliance/dsrWorkflow';
+import { getDSRIdentityVerifier } from './compliance/dsrIdentityVerifier';
 import { logger } from './utils/secureLogger';
 import { logAuditEvent } from './audit/auditLogger';
-import { AuditEventType } from './audit/auditEvents';
+import { AuditEventType, AuditSeverity } from './audit/auditEvents';
+
+/**
+ * POST /api/dsr/verify/request - Request identity verification
+ * GDPR Article 12(6) - Identity verification for DSR requests
+ *
+ * Request body:
+ * {
+ *   "email": "user@example.com",
+ *   "dsrRequestId": "optional-existing-request-id"
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "tokenId": "verification-token-id",
+ *   "message": "Verification code sent to email",
+ *   "expiresInMinutes": 30
+ * }
+ */
+export async function handleRequestVerification(req: Request): Promise<Response> {
+  try {
+    const body = await req.json();
+
+    // Validate email
+    if (!body.email || typeof body.email !== 'string') {
+      logAuditEvent(AuditEventType.ERROR_VALIDATION, 'FAILURE', {
+        action: 'request_dsr_verification',
+        error: 'Missing or invalid email',
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing or invalid email address',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(body.email)) {
+      logAuditEvent(AuditEventType.ERROR_VALIDATION, 'FAILURE', {
+        action: 'request_dsr_verification',
+        error: 'Invalid email format',
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid email format',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Get IP address from request
+    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+
+    const verifier = getDSRIdentityVerifier();
+    const result = await verifier.createVerificationToken(
+      body.email,
+      body.dsrRequestId,
+      ipAddress
+    );
+
+    // Check for rate limiting error
+    if ('error' in result) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: result.error,
+        }),
+        {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    logger.info('DSR verification requested', {
+      tokenId: result.tokenId.substring(0, 8) + '...',
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        tokenId: result.tokenId,
+        message: 'Verification code sent to email',
+        expiresInMinutes: 30,
+        // In production, DO NOT send the code in the response!
+        // This is only for testing/development
+        code: result.code,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    logger.error('Failed to request DSR verification', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to request verification',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+}
+
+/**
+ * POST /api/dsr/verify/confirm - Confirm identity verification
+ * GDPR Article 12(6) - Identity verification for DSR requests
+ *
+ * Request body:
+ * {
+ *   "tokenId": "verification-token-id",
+ *   "code": "123456"
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "verified": true,
+ *   "email": "user@example.com"
+ * }
+ */
+export async function handleConfirmVerification(req: Request): Promise<Response> {
+  try {
+    const body = await req.json();
+
+    // Validate required fields
+    if (!body.tokenId || !body.code) {
+      logAuditEvent(AuditEventType.ERROR_VALIDATION, 'FAILURE', {
+        action: 'confirm_dsr_verification',
+        error: 'Missing tokenId or code',
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing required fields: tokenId and code',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Get IP address from request
+    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+
+    const verifier = getDSRIdentityVerifier();
+    const result = verifier.verifyToken(body.tokenId, body.code, ipAddress);
+
+    if (!result.verified) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          verified: false,
+          error: result.error || 'Verification failed',
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    logger.info('DSR verification confirmed', {
+      tokenId: body.tokenId.substring(0, 8) + '...',
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        verified: true,
+        email: result.email,
+        message: 'Identity verified successfully',
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    logger.error('Failed to confirm DSR verification', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to confirm verification',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+}
 
 /**
  * POST /api/dsr/requests - Create new DSR request
+ * GDPR Article 12(6) - Requires identity verification
  *
  * Request body:
  * {
  *   "type": "access" | "erasure" | "portability" | "rectification" | "restriction" | "objection" | "withdraw_consent",
+ *   "verificationTokenId": "verified-token-id",  // REQUIRED for GDPR Article 12(6)
  *   "requesterInfo": {
  *     "email": "user@example.com",
  *     "userId": "optional-user-id"
@@ -55,6 +274,30 @@ export async function handleCreateDSRRequest(req: Request): Promise<Response> {
       );
     }
 
+    if (!body.verificationTokenId) {
+      logAuditEvent(
+        AuditEventType.ERROR_VALIDATION,
+        'FAILURE',
+        {
+          action: 'create_dsr_request',
+          error: 'Missing verificationTokenId - identity verification required (GDPR Article 12(6))',
+        },
+        undefined,
+        AuditSeverity.CRITICAL
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Identity verification required. Please request verification first at /api/dsr/verify/request',
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     if (!body.requesterInfo) {
       logAuditEvent(AuditEventType.ERROR_VALIDATION, 'FAILURE', {
         action: 'create_dsr_request',
@@ -68,6 +311,84 @@ export async function handleCreateDSRRequest(req: Request): Promise<Response> {
         }),
         {
           status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // GDPR Article 12(6): Verify identity before processing DSR
+    const verifier = getDSRIdentityVerifier();
+    if (!verifier.isTokenVerified(body.verificationTokenId)) {
+      logAuditEvent(
+        AuditEventType.ERROR_AUTHENTICATION,
+        'FAILURE',
+        {
+          action: 'create_dsr_request',
+          error: 'Verification token not verified or invalid',
+          tokenId: body.verificationTokenId.substring(0, 8) + '...',
+        },
+        undefined,
+        AuditSeverity.CRITICAL
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Identity verification failed. Please complete verification at /api/dsr/verify/confirm',
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Get verified email from token
+    const token = verifier.getToken(body.verificationTokenId);
+    if (!token || !token.verified_at) {
+      logAuditEvent(
+        AuditEventType.ERROR_AUTHENTICATION,
+        'FAILURE',
+        {
+          action: 'create_dsr_request',
+          error: 'Verification token not found or not verified',
+        },
+        undefined,
+        AuditSeverity.CRITICAL
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid or expired verification token',
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Verify email matches the verified token
+    if (body.requesterInfo.email !== token.email) {
+      logAuditEvent(
+        AuditEventType.ERROR_AUTHENTICATION,
+        'FAILURE',
+        {
+          action: 'create_dsr_request',
+          error: 'Email mismatch with verified token',
+        },
+        undefined,
+        AuditSeverity.CRITICAL
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Email does not match verified identity',
+        }),
+        {
+          status: 403,
           headers: { 'Content-Type': 'application/json' },
         }
       );

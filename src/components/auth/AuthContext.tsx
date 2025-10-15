@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
 
       // Check if password is set
-      const statusResponse = await fetch('http://localhost:3001/api/auth/status');
+      const statusResponse = await fetch('http://localhost:3010/api/auth/status');
       const statusData = await statusResponse.json();
       setIsPasswordSet(statusData.isSetup);
 
@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (storedToken && statusData.isSetup) {
         // Validate the token with the backend
         try {
-          const validateResponse = await fetch('http://localhost:3001/api/auth/validate', {
+          const validateResponse = await fetch('http://localhost:3010/api/auth/validate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: storedToken }),
@@ -99,7 +99,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const setupPassword = async (password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch('http://localhost:3001/api/auth/setup', {
+      const response = await fetch('http://localhost:3010/api/auth/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -126,7 +126,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+      const response = await fetch('http://localhost:3010/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),

@@ -10,7 +10,7 @@ bun run start
 
 This will start:
 - **Ollama** (AI model server) on `http://localhost:11434`
-- **Backend** (WebSocket + API server) on `http://localhost:3001`
+- **Backend** (WebSocket + API server) on `http://localhost:3010`
 - **Frontend** (React app) on `http://localhost:5173`
 
 Press `Ctrl+C` to stop all servers.
@@ -113,8 +113,8 @@ After setup, use this password to login.
 Kill existing processes:
 
 ```bash
-# Kill backend (port 3001)
-lsof -ti:3001 | xargs kill -9
+# Kill backend (port 3010)
+lsof -ti:3010 | xargs kill -9
 
 # Kill frontend (port 5173)
 lsof -ti:5173 | xargs kill -9

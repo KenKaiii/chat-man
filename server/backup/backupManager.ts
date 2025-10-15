@@ -294,6 +294,131 @@ export class BackupManager {
       return 0;
     }
   }
+
+  /**
+   * Verify backup integrity without restoring
+   * Tests decryption and decompression without writing to disk
+   */
+  verifyBackup(backupId: string): { valid: boolean; error?: string; size?: number } {
+    try {
+      // Find backup file
+      const backups = this.listBackups();
+      const backup = backups.find(b => b.id === backupId);
+
+      if (!backup) {
+        return { valid: false, error: `Backup not found: ${backupId}` };
+      }
+
+      const backupPath = join(BACKUP_DIR, backup.filename);
+      const backupData = JSON.parse(readFileSync(backupPath, 'utf-8')) as EncryptedBackup;
+
+      logger.info('Verifying backup integrity', { id: backupId });
+
+      // Test decryption
+      const keyManager = getKeyManager();
+      const decrypted = keyManager.decrypt(
+        backupData.encrypted,
+        backupData.iv,
+        backupData.tag,
+        'backup'
+      );
+
+      // Test decompression
+      const decompressed = gunzipSync(decrypted);
+
+      logger.info('Backup verification successful', {
+        id: backupId,
+        size: decompressed.length,
+      });
+
+      return {
+        valid: true,
+        size: decompressed.length,
+      };
+    } catch (error) {
+      logger.error('Backup verification failed', {
+        backupId,
+        error: error instanceof Error ? error.message : 'Unknown',
+      });
+
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Test restore backup to temporary location
+   * Verifies backup can be restored without affecting production database
+   */
+  testRestoreBackup(backupId: string): { success: boolean; error?: string; size?: number } {
+    try {
+      // Find backup file
+      const backups = this.listBackups();
+      const backup = backups.find(b => b.id === backupId);
+
+      if (!backup) {
+        return { success: false, error: `Backup not found: ${backupId}` };
+      }
+
+      const backupPath = join(BACKUP_DIR, backup.filename);
+      const backupData = JSON.parse(readFileSync(backupPath, 'utf-8')) as EncryptedBackup;
+
+      logger.info('Test restoring backup', { id: backupId });
+
+      // Decrypt with KeyManager
+      const keyManager = getKeyManager();
+      const decrypted = keyManager.decrypt(
+        backupData.encrypted,
+        backupData.iv,
+        backupData.tag,
+        'backup'
+      );
+
+      // Decompress
+      const decompressed = gunzipSync(decrypted);
+
+      logger.info('Decrypted and decompressed test backup', {
+        size: decompressed.length,
+      });
+
+      // Write to temporary test file
+      const testDbPath = join(BACKUP_DIR, `test-restore-${Date.now()}.db`);
+      writeFileSync(testDbPath, decompressed);
+
+      logger.info('Test restore successful, wrote to temp file', {
+        id: backupId,
+        testDbPath,
+        size: decompressed.length,
+      });
+
+      // Verify the temp file exists and has correct size
+      const stats = statSync(testDbPath);
+      if (stats.size !== decompressed.length) {
+        throw new Error('Test restore file size mismatch');
+      }
+
+      // Clean up temporary file
+      unlinkSync(testDbPath);
+      logger.info('Cleaned up test restore file', { testDbPath });
+
+      return {
+        success: true,
+        size: decompressed.length,
+      };
+    } catch (error) {
+      logger.error('Test restore failed', {
+        backupId,
+        error: error instanceof Error ? error.message : 'Unknown',
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 }
 
 // Singleton instance

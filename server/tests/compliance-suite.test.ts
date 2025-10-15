@@ -16,7 +16,7 @@ import { getAuditLogger } from '../audit/auditLogger';
 import { loadSettings } from '../config';
 
 // Test server URL
-const SERVER_URL = 'http://localhost:3001';
+const SERVER_URL = 'http://localhost:3010';
 
 console.log('\n=== GDPR/HIPAA Compliance Test Suite ===\n');
 

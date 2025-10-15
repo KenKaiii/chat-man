@@ -88,7 +88,7 @@ export default function ComplianceModal({ isOpen, onClose }: ComplianceModalProp
   const fetchComplianceStatus = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/compliance/status');
+      const response = await fetch('http://localhost:3010/api/compliance/status');
       const data = await response.json();
       setComplianceData(data);
     } catch (error) {

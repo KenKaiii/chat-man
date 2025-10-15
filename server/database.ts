@@ -25,7 +25,11 @@ export interface DBMessage {
   id: string;
   session_id: string;
   type: 'user' | 'assistant';
-  content: string; // JSON-serialized
+  content: string; // JSON-serialized (legacy, kept for migration)
+  content_encrypted?: string; // AES-256-GCM encrypted content (base64)
+  content_iv?: string; // Initialization vector (base64)
+  content_tag?: string; // Authentication tag (base64)
+  is_encrypted?: number; // SQLite boolean (0 or 1)
   timestamp: string;
 }
 
@@ -44,16 +48,13 @@ export class SessionDatabase {
     // Create database connection
     this.db = new Database(DB_PATH);
 
-    // Note: bun:sqlite doesn't support SQLCipher-style encryption natively
-    // For production HIPAA compliance, consider:
-    // 1. File-system level encryption (LUKS, FileVault, BitLocker)
-    // 2. Application-level encryption (encrypt sensitive fields before storing)
-    // 3. Run with Node.js + @journeyapps/sqlcipher for database encryption
-    logger.info('Database using Bun SQLite (no at-rest encryption)');
-    logger.warn('For production HIPAA compliance:');
-    logger.warn('  - Use filesystem encryption (LUKS/FileVault/BitLocker)');
-    logger.warn('  - OR run with Node.js + SQLCipher for database encryption');
-    logger.warn('  - OR implement application-level field encryption');
+    // Application-level field encryption is enabled (AES-256-GCM)
+    logger.info('Database using Bun SQLite with field-level encryption');
+    logger.info('Encryption: AES-256-GCM for message content (HIPAA §164.312(a)(2)(iv))');
+    logger.warn('For enhanced security, also enable filesystem encryption:');
+    logger.warn('  - macOS: FileVault');
+    logger.warn('  - Linux: LUKS');
+    logger.warn('  - Windows: BitLocker');
 
     this.initializeTables();
     logger.info('Connected to SQLite database', { path: DB_PATH });
@@ -71,13 +72,17 @@ export class SessionDatabase {
       )
     `);
 
-    // Create messages table
+    // Create messages table with encryption support
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
         type TEXT NOT NULL,
         content TEXT NOT NULL,
+        content_encrypted TEXT,
+        content_iv TEXT,
+        content_tag TEXT,
+        is_encrypted INTEGER DEFAULT 0,
         timestamp TEXT NOT NULL,
         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
       )
@@ -161,16 +166,34 @@ export class SessionDatabase {
   }
 
   /**
-   * Add a message to a session
+   * Add a message to a session (with encryption)
    */
   addMessage(sessionId: string, message: Omit<Message, 'type'> & { type: 'user' | 'assistant' }): void {
     const contentStr = typeof message.content === 'string'
       ? JSON.stringify(message.content)
       : JSON.stringify(message.content);
 
+    // Encrypt content using KeyManager (AES-256-GCM)
+    const keyManager = getKeyManager();
+    const encrypted = keyManager.encrypt(contentStr, 'message-content');
+
     this.db.run(
-      'INSERT INTO messages (id, session_id, type, content, timestamp) VALUES (?, ?, ?, ?, ?)',
-      [message.id, sessionId, message.type, contentStr, message.timestamp]
+      `INSERT INTO messages (
+        id, session_id, type, content,
+        content_encrypted, content_iv, content_tag, is_encrypted,
+        timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        message.id,
+        sessionId,
+        message.type,
+        '', // Empty legacy content field
+        encrypted.encrypted,
+        encrypted.iv,
+        encrypted.tag,
+        1, // is_encrypted = true
+        message.timestamp
+      ]
     );
 
     // Update session's updated_at timestamp
@@ -179,23 +202,73 @@ export class SessionDatabase {
       sessionId
     ]);
 
-    logger.debug('Added message to session', {
+    logger.debug('Added encrypted message to session', {
       type: message.type,
       sessionId: sessionId.substring(0, 8) + '...',
+      encrypted: true,
       // content: NEVER LOGGED
     });
   }
 
   /**
-   * Get all messages for a session
+   * Get all messages for a session (with decryption)
    */
   getMessages(sessionId: string): Message[] {
     const rows = this.db.query(
       'SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC'
     ).all(sessionId) as DBMessage[];
 
+    const keyManager = getKeyManager();
+
     return rows.map((row) => {
-      const content = JSON.parse(row.content);
+      let content: any;
+
+      // Check if message is encrypted (with explicit null/empty checks)
+      if (
+        row.is_encrypted === 1 &&
+        row.content_encrypted &&
+        row.content_iv &&
+        row.content_tag &&
+        row.content_encrypted.length > 0 &&
+        row.content_iv.length > 0 &&
+        row.content_tag.length > 0
+      ) {
+        // Decrypt encrypted message
+        try {
+          const decrypted = keyManager.decrypt(
+            row.content_encrypted,
+            row.content_iv,
+            row.content_tag,
+            'message-content'
+          );
+          content = JSON.parse(decrypted.toString('utf-8'));
+        } catch (error) {
+          logger.error('Failed to decrypt message', {
+            messageId: row.id.substring(0, 8) + '...',
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+          // Return error placeholder instead of crashing
+          content = '[Decryption failed]';
+        }
+      } else if (row.content && row.content.length > 0) {
+        // Legacy unencrypted message
+        try {
+          content = JSON.parse(row.content);
+        } catch (error) {
+          logger.error('Failed to parse legacy message content', {
+            messageId: row.id.substring(0, 8) + '...',
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+          content = '[Parse failed]';
+        }
+      } else {
+        // Completely empty message
+        logger.warn('Message has no content', {
+          messageId: row.id.substring(0, 8) + '...',
+          is_encrypted: row.is_encrypted,
+        });
+        content = '[No content available]';
+      }
 
       return {
         id: row.id,
@@ -236,15 +309,63 @@ export class SessionDatabase {
   }
 
   /**
-   * Get all messages across all sessions (for export)
+   * Get all messages across all sessions (for export, with decryption)
    */
   getAllMessages(): Message[] {
     const rows = this.db.query(
       'SELECT * FROM messages ORDER BY timestamp ASC'
     ).all() as DBMessage[];
 
+    const keyManager = getKeyManager();
+
     return rows.map((row) => {
-      const content = JSON.parse(row.content);
+      let content: any;
+
+      // Check if message is encrypted (with explicit null/empty checks)
+      if (
+        row.is_encrypted === 1 &&
+        row.content_encrypted &&
+        row.content_iv &&
+        row.content_tag &&
+        row.content_encrypted.length > 0 &&
+        row.content_iv.length > 0 &&
+        row.content_tag.length > 0
+      ) {
+        // Decrypt encrypted message
+        try {
+          const decrypted = keyManager.decrypt(
+            row.content_encrypted,
+            row.content_iv,
+            row.content_tag,
+            'message-content'
+          );
+          content = JSON.parse(decrypted.toString('utf-8'));
+        } catch (error) {
+          logger.error('Failed to decrypt message', {
+            messageId: row.id.substring(0, 8) + '...',
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+          content = '[Decryption failed]';
+        }
+      } else if (row.content && row.content.length > 0) {
+        // Legacy unencrypted message
+        try {
+          content = JSON.parse(row.content);
+        } catch (error) {
+          logger.error('Failed to parse legacy message content', {
+            messageId: row.id.substring(0, 8) + '...',
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+          content = '[Parse failed]';
+        }
+      } else {
+        // Completely empty message
+        logger.warn('Message has no content', {
+          messageId: row.id.substring(0, 8) + '...',
+          is_encrypted: row.is_encrypted,
+        });
+        content = '[No content available]';
+      }
 
       return {
         id: row.id,
@@ -274,8 +395,57 @@ export class SessionDatabase {
       'SELECT * FROM messages ORDER BY timestamp ASC'
     ).all() as DBMessage[];
 
+    const keyManager = getKeyManager();
+
     const messages = messagesRaw.map((row) => {
-      const content = JSON.parse(row.content);
+      let content: any;
+
+      // Check if message is encrypted (with explicit null/empty checks)
+      if (
+        row.is_encrypted === 1 &&
+        row.content_encrypted &&
+        row.content_iv &&
+        row.content_tag &&
+        row.content_encrypted.length > 0 &&
+        row.content_iv.length > 0 &&
+        row.content_tag.length > 0
+      ) {
+        // Decrypt encrypted message
+        try {
+          const decrypted = keyManager.decrypt(
+            row.content_encrypted,
+            row.content_iv,
+            row.content_tag,
+            'message-content'
+          );
+          content = JSON.parse(decrypted.toString('utf-8'));
+        } catch (error) {
+          logger.error('Failed to decrypt message during export', {
+            messageId: row.id.substring(0, 8) + '...',
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+          content = '[Decryption failed]';
+        }
+      } else if (row.content && row.content.length > 0) {
+        // Legacy unencrypted message
+        try {
+          content = JSON.parse(row.content);
+        } catch (error) {
+          logger.error('Failed to parse legacy message content during export', {
+            messageId: row.id.substring(0, 8) + '...',
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+          content = '[Parse failed]';
+        }
+      } else {
+        // Completely empty message
+        logger.warn('Message has no content during export', {
+          messageId: row.id.substring(0, 8) + '...',
+          is_encrypted: row.is_encrypted,
+        });
+        content = '[No content available]';
+      }
+
       return {
         id: row.id,
         session_id: row.session_id,

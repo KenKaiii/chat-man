@@ -49,6 +49,15 @@ export interface AuditConfig {
   logRetentionDays: number;
 }
 
+export interface MonitoringConfig {
+  enabled: boolean;
+  alertWebhookUrl: string | null;
+  failedLoginThreshold: number;
+  backupRestoreThreshold: number;
+  checkIntervalMinutes: number;
+  retainAlertsForDays: number;
+}
+
 export interface Settings {
   model: ModelConfig;
   system: SystemConfig;
@@ -56,6 +65,7 @@ export interface Settings {
   retention?: RetentionConfig;
   backup?: BackupConfig;
   audit?: AuditConfig;
+  monitoring?: MonitoringConfig;
 }
 
 /**
@@ -124,6 +134,14 @@ export async function loadSettings(): Promise<Settings> {
         logToFile: true,
         logRetentionDays: 30,
       },
+      monitoring: parsed.monitoring || {
+        enabled: false,
+        alertWebhookUrl: null,
+        failedLoginThreshold: 5,
+        backupRestoreThreshold: 2,
+        checkIntervalMinutes: 5,
+        retainAlertsForDays: 90,
+      },
     };
   } catch (_error) {
     console.warn('⚠️  Could not load settings.json, using defaults');
@@ -162,6 +180,14 @@ export async function loadSettings(): Promise<Settings> {
         enabled: true,
         logToFile: true,
         logRetentionDays: 30,
+      },
+      monitoring: {
+        enabled: false,
+        alertWebhookUrl: null,
+        failedLoginThreshold: 5,
+        backupRestoreThreshold: 2,
+        checkIntervalMinutes: 5,
+        retainAlertsForDays: 90,
       },
     };
   }

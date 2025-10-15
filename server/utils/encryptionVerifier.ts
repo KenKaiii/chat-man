@@ -189,8 +189,14 @@ export async function requireFilesystemEncryption(): Promise<void> {
         break;
     }
 
-    console.error('To disable this check (NOT RECOMMENDED for production):');
-    console.error('  Set environment variable: SKIP_ENCRYPTION_CHECK=true\n');
+    // Only suggest bypass in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('To disable this check in development (NOT RECOMMENDED):');
+      console.error('  Set environment variable: SKIP_ENCRYPTION_CHECK=true\n');
+    } else {
+      console.error('PRODUCTION MODE: Encryption bypass is DISABLED for compliance.\n');
+      console.error('This application cannot run without filesystem encryption in production.\n');
+    }
 
     process.exit(1);
   }
@@ -198,29 +204,44 @@ export async function requireFilesystemEncryption(): Promise<void> {
 
 /**
  * Check encryption with environment variable override
+ * SECURITY: In production, bypass is DISABLED for HIPAA compliance
  */
 export async function verifyEncryptionOrWarn(): Promise<void> {
-  // Check if skip flag is set
+  // PRODUCTION MODE: NO BYPASS ALLOWED
+  if (process.env.NODE_ENV === 'production') {
+    logger.info('Production mode: Filesystem encryption is REQUIRED for HIPAA compliance');
+
+    // Check if someone tried to bypass in production
+    if (process.env.SKIP_ENCRYPTION_CHECK === 'true') {
+      logger.error('SECURITY VIOLATION: Attempted to bypass encryption check in production');
+      console.error('\n❌ SECURITY ERROR: Encryption bypass is DISABLED in production\n');
+      console.error('HIPAA §164.312(a)(2)(iv) requires encryption at rest.');
+      console.error('This application cannot run without filesystem encryption in production.\n');
+      process.exit(1);
+    }
+
+    // Require encryption (will exit if not enabled)
+    await requireFilesystemEncryption();
+    return;
+  }
+
+  // DEVELOPMENT MODE: Allow bypass with warning
   if (process.env.SKIP_ENCRYPTION_CHECK === 'true') {
     logger.warn('Filesystem encryption check SKIPPED (SKIP_ENCRYPTION_CHECK=true)');
-    logger.warn('This is NOT RECOMMENDED for production use');
+    logger.warn('This is ONLY allowed in development mode');
     console.warn('\n⚠️  WARNING: Filesystem encryption check is DISABLED');
-    console.warn('⚠️  This is NOT HIPAA compliant for production use\n');
+    console.warn('⚠️  This is NOT HIPAA compliant for production use');
+    console.warn('⚠️  Development mode only - bypass will NOT work in production\n');
     return;
   }
 
   // In development, just warn instead of exiting
-  if (process.env.NODE_ENV === 'development') {
-    const status = await verifyFilesystemEncryption();
-    if (!status.enabled) {
-      console.warn('\n⚠️  WARNING: Filesystem encryption is not enabled');
-      console.warn(`⚠️  Type: ${status.type}`);
-      console.warn(`⚠️  Status: ${status.details}`);
-      console.warn('⚠️  This is required for HIPAA compliance in production\n');
-    }
-    return;
+  const status = await verifyFilesystemEncryption();
+  if (!status.enabled) {
+    console.warn('\n⚠️  WARNING: Filesystem encryption is not enabled');
+    console.warn(`⚠️  Type: ${status.type}`);
+    console.warn(`⚠️  Status: ${status.details}`);
+    console.warn('⚠️  This is required for HIPAA compliance in production');
+    console.warn('⚠️  To skip this check in development: SKIP_ENCRYPTION_CHECK=true\n');
   }
-
-  // In production, require encryption
-  await requireFilesystemEncryption();
 }

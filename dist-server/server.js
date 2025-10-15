@@ -189,7 +189,7 @@ async function reloadConfig() {
 }
 
 // server/server.ts
-var PORT = process.env.PORT || 3001;
+var PORT = process.env.PORT || 3010;
 var activeGenerations = new Map;
 var conversationHistory = new Map;
 var systemContext = "";

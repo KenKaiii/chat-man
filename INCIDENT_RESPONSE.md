@@ -93,7 +93,7 @@ This incident response plan provides procedures for identifying, containing, and
 1. **Automated Alerts**
 ```bash
 # Check security alerts
-curl http://localhost:3001/api/security/alerts?resolved=false | jq
+curl http://localhost:3010/api/security/alerts?resolved=false | jq
 ```
 
 2. **Audit Log Monitoring**
@@ -105,7 +105,7 @@ grep "CRITICAL" data/audit/audit.log | tail -n 50 | jq
 3. **System Health Checks**
 ```bash
 # Check system health
-curl http://localhost:3001/api/health/detailed | jq
+curl http://localhost:3010/api/health/detailed | jq
 ```
 
 4. **User Reports**
@@ -132,19 +132,19 @@ curl http://localhost:3001/api/health/detailed | jq
 mkdir -p incident-$(date +%Y%m%d-%H%M%S)/evidence
 cd incident-$(date +%Y%m%d-%H%M%S)/evidence
 
-curl http://localhost:3001/api/security/alerts > security-alerts.json
+curl http://localhost:3010/api/security/alerts > security-alerts.json
 ```
 
 2. **Export Audit Logs**
 ```bash
 cp data/audit/audit.log audit-log-backup.log
-curl http://localhost:3001/api/audit/export > audit-export.json
+curl http://localhost:3010/api/audit/export > audit-export.json
 ```
 
 3. **Capture System State**
 ```bash
-curl http://localhost:3001/api/health/detailed > system-health.json
-curl http://localhost:3001/api/metrics > system-metrics.json
+curl http://localhost:3010/api/health/detailed > system-health.json
+curl http://localhost:3010/api/metrics > system-metrics.json
 ps aux > process-list.txt
 netstat -tuln > network-connections.txt
 ```
@@ -173,7 +173,7 @@ pm2 stop chatman
 2. **Isolate System**
 ```bash
 # Block external access at firewall
-sudo iptables -A INPUT -p tcp --dport 3001 -j DROP
+sudo iptables -A INPUT -p tcp --dport 3010 -j DROP
 
 # OR disable in reverse proxy
 sudo systemctl stop nginx
@@ -222,7 +222,7 @@ bun run server/auth/setup.ts
 for backup in data/backups/*.backup; do
   BACKUP_ID=$(basename $backup .backup)
   echo "Verifying: $BACKUP_ID"
-  curl -X POST http://localhost:3001/api/backup/verify/$BACKUP_ID
+  curl -X POST http://localhost:3010/api/backup/verify/$BACKUP_ID
 done
 ```
 
@@ -315,10 +315,10 @@ chmod 644 config/settings.json
 1. **Verify System Integrity**
 ```bash
 # Check system health
-curl http://localhost:3001/api/health/detailed | jq
+curl http://localhost:3010/api/health/detailed | jq
 
 # Verify no security alerts
-curl http://localhost:3001/api/security/alerts?resolved=false | jq
+curl http://localhost:3010/api/security/alerts?resolved=false | jq
 ```
 
 2. **Test with Limited Access**
@@ -332,13 +332,13 @@ curl http://localhost:3001/api/security/alerts?resolved=false | jq
 3. **Restore from Backup if Necessary**
 ```bash
 # List available backups
-curl http://localhost:3001/api/backup/list | jq
+curl http://localhost:3010/api/backup/list | jq
 
 # Test restore first
-curl -X POST http://localhost:3001/api/backup/test-restore/<backup-id>
+curl -X POST http://localhost:3010/api/backup/test-restore/<backup-id>
 
 # If test successful, restore
-curl -X POST http://localhost:3001/api/backup/restore/<backup-id>
+curl -X POST http://localhost:3010/api/backup/restore/<backup-id>
 ```
 
 4. **Gradual Service Restoration**
@@ -350,7 +350,7 @@ sudo systemctl start chatman
 journalctl -u chatman -f
 
 # Re-enable external access
-sudo iptables -D INPUT -p tcp --dport 3001 -j DROP
+sudo iptables -D INPUT -p tcp --dport 3010 -j DROP
 sudo systemctl start nginx
 ```
 
@@ -560,8 +560,8 @@ cp -r config/ $INCIDENT_DIR/evidence/
 
 # 3. CAPTURE STATE
 echo "Step 3: Capturing system state..."
-curl http://localhost:3001/api/security/alerts > $INCIDENT_DIR/evidence/alerts.json
-curl http://localhost:3001/api/audit/export > $INCIDENT_DIR/evidence/audit-export.json
+curl http://localhost:3010/api/security/alerts > $INCIDENT_DIR/evidence/alerts.json
+curl http://localhost:3010/api/audit/export > $INCIDENT_DIR/evidence/audit-export.json
 ps aux > $INCIDENT_DIR/evidence/processes.txt
 netstat -tuln > $INCIDENT_DIR/evidence/network.txt
 
@@ -619,7 +619,7 @@ echo "=== Backup Compromise Response Playbook ==="
 echo "Step 1: Verifying all backups..."
 for backup in data/backups/*.backup; do
   BACKUP_ID=$(basename $backup .backup)
-  RESULT=$(curl -s -X POST http://localhost:3001/api/backup/verify/$BACKUP_ID)
+  RESULT=$(curl -s -X POST http://localhost:3010/api/backup/verify/$BACKUP_ID)
   echo "$BACKUP_ID: $RESULT"
 done
 
@@ -630,11 +630,11 @@ cp -r data/backups/ $BACKUP_COPY/
 
 # 3. IDENTIFY LAST KNOWN GOOD BACKUP
 echo "Step 3: Identifying last known good backup..."
-curl http://localhost:3001/api/backup/list | jq '.backups | sort_by(.timestamp) | reverse'
+curl http://localhost:3010/api/backup/list | jq '.backups | sort_by(.timestamp) | reverse'
 
 # 4. CREATE NEW BACKUP FROM CURRENT STATE
 echo "Step 4: Creating verified backup..."
-curl -X POST http://localhost:3001/api/backup/create
+curl -X POST http://localhost:3010/api/backup/create
 
 echo "Forensic copy saved to: $BACKUP_COPY"
 ```

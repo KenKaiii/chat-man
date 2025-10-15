@@ -84,7 +84,7 @@ echo "$BACKEND_PID Backend" >> "$PIDFILE"
 sleep 2
 if kill -0 "$BACKEND_PID" 2>/dev/null; then
     echo -e "${GREEN}   ✓ Backend started (PID: $BACKEND_PID)${NC}"
-    echo -e "${GREEN}   → http://localhost:3001${NC}"
+    echo -e "${GREEN}   → http://localhost:3010${NC}"
 else
     echo -e "${RED}   ✗ Failed to start backend${NC}"
     echo -e "${YELLOW}   Check logs: tail -f /tmp/chat-man-backend.log${NC}"
@@ -115,7 +115,7 @@ echo -e "${GREEN}╚════════════════════
 echo ""
 echo -e "${BLUE}Services:${NC}"
 echo -e "  ${GREEN}Frontend:${NC}  http://localhost:5173"
-echo -e "  ${GREEN}Backend:${NC}   http://localhost:3001"
+echo -e "  ${GREEN}Backend:${NC}   http://localhost:3010"
 echo -e "  ${GREEN}Ollama:${NC}    http://localhost:11434"
 echo ""
 echo -e "${BLUE}Logs:${NC}"

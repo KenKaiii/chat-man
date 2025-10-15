@@ -76,7 +76,7 @@ Limits vocabulary to top K tokens.
 After editing configuration files, reload without restarting:
 
 ```bash
-curl -X POST http://localhost:3001/api/reload-config
+curl -X POST http://localhost:3010/api/reload-config
 ```
 
 Or restart the server:

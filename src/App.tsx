@@ -15,6 +15,7 @@ import { AboutButton } from "./components/header/AboutButton";
 import { ComplianceButton } from "./components/header/ComplianceButton";
 import { SettingsButton } from "./components/header/SettingsButton";
 import { AuditButton } from "./components/header/AuditButton";
+import { ModelSelector } from "./components/header/ModelSelector";
 import { Toaster } from "sonner";
 import { Menu, Edit3 } from "lucide-react";
 import { useSessionAPI, type Session } from "./hooks/useSessionAPI";
@@ -25,6 +26,7 @@ const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRAGModalOpen, setIsRAGModalOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('llama3.2:3b');
 
   const [pendingMessage, setPendingMessage] = useState<{
     content: string;
@@ -185,7 +187,7 @@ const App: React.FC = () => {
                   )}
                 </div>
 
-                {/* Center - Logo and Title */}
+                {/* Center - Logo, Title, and Model Selector */}
                 <div className="header-center">
                   <div className="flex flex-col items-start w-full">
                     <div className="flex justify-between items-center w-full">
@@ -201,6 +203,12 @@ const App: React.FC = () => {
                         <div className="header-title text-gradient">
                           Chat Man
                         </div>
+                        <ModelSelector
+                          selectedModel={selectedModel}
+                          onModelChange={setSelectedModel}
+                          disabled={!!currentSessionId}
+                          hasMessages={!!currentSessionId}
+                        />
                       </div>
                     </div>
                   </div>
@@ -231,7 +239,7 @@ const App: React.FC = () => {
           ) : currentSessionId ? (
             <ChatContainer
               key={currentSessionId}
-              websocketUrl="ws://localhost:3001/ws"
+              websocketUrl="ws://localhost:3010/ws"
               sessionId={currentSessionId}
               initialMessages={currentMessages}
               onMessageSent={async (_msg) => {

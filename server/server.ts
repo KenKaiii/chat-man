@@ -5,7 +5,7 @@
  */
 
 import type { ServerWebSocket } from 'bun';
-import { checkOllamaHealth, streamChat, listModels, getDefaultModel } from './ollama';
+import { checkOllamaHealth, streamChat, listModels, getDefaultModel, pullModelWithProgress } from './ollama';
 import type {
   ChatMessage,
   StopGenerationMessage,
@@ -38,7 +38,7 @@ import { ensureEncryptionUnlocked } from './encryption/setupWizard';
 import { logAuditEvent } from './audit/auditLogger';
 import { AuditEventType } from './audit/auditEvents';
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3010;
 
 // CORS helper function
 function addCorsHeaders(response: Response): Response {
@@ -59,6 +59,17 @@ let db: SessionDatabase;
 
 // Track active generation streams per session
 const activeGenerations = new Map<string, AbortController>();
+
+// Track model download progress
+const downloadProgress = new Map<string, {
+  status: string;
+  progress: number;
+  completed: number;
+  total: number;
+}>();
+
+// Track active model downloads for cancellation
+const activeDownloads = new Map<string, AbortController>();
 
 // Model configuration
 let modelConfig: Awaited<ReturnType<typeof getModelConfig>>;
@@ -109,6 +120,219 @@ Bun.serve({
       } catch (_error) {
         return addCorsHeaders(Response.json(
           { error: 'Failed to fetch models' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // API endpoint to check model availability status
+    if (url.pathname === '/api/models/status' && req.method === 'GET') {
+      try {
+        // Get list of downloaded models from Ollama
+        const { models: ollamaModels } = await listModels();
+        const downloadedModelNames = ollamaModels.map(m => m.name);
+
+        // Import configured models
+        const { AVAILABLE_MODELS } = await import('../src/config/models');
+
+        // Check which configured models are downloaded
+        const modelStatus = AVAILABLE_MODELS.map(model => {
+          // Check if model is downloaded with flexible matching
+          const isDownloaded = downloadedModelNames.some(downloadedName => {
+            // Exact match
+            if (downloadedName === model.apiModelId) return true;
+
+            // Check if downloaded name starts with our model ID + ':'
+            // e.g., "qwen2.5-coder:7b" matches "qwen2.5-coder"
+            if (downloadedName.startsWith(model.apiModelId + ':')) return true;
+
+            // Check if our model ID starts with downloaded name + ':'
+            // e.g., config "llama3.3:70b" matches downloaded "llama3.3:70b"
+            // But "llama3.2:1b" should NOT match "llama3.2:3b"
+            if (model.apiModelId.startsWith(downloadedName + ':')) return true;
+
+            return false;
+          });
+
+          return {
+            id: model.id,
+            name: model.name,
+            description: model.description,
+            apiModelId: model.apiModelId,
+            provider: model.provider,
+            downloaded: isDownloaded,
+          };
+        });
+
+        return addCorsHeaders(Response.json({ models: modelStatus }));
+      } catch (error) {
+        logger.error('Failed to check model status', {
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to check model status' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // API endpoint to download a model
+    if (url.pathname === '/api/models/download' && req.method === 'POST') {
+      try {
+        const body = await req.json() as { modelId: string };
+        const { modelId } = body;
+
+        if (!modelId) {
+          return addCorsHeaders(Response.json(
+            { error: 'Model ID is required' },
+            { status: 400 }
+          ));
+        }
+
+        // Import configured models to validate
+        const { AVAILABLE_MODELS } = await import('../src/config/models');
+        const model = AVAILABLE_MODELS.find(m => m.apiModelId === modelId);
+
+        if (!model) {
+          return addCorsHeaders(Response.json(
+            { error: 'Invalid model ID' },
+            { status: 400 }
+          ));
+        }
+
+        // Audit log model download initiation
+        logAuditEvent(AuditEventType.DATA_ACCESS, 'SUCCESS', {
+          action: 'model_download_start',
+          modelId: model.apiModelId,
+        });
+
+        // Initialize progress tracking
+        downloadProgress.set(model.apiModelId, {
+          status: 'starting',
+          progress: 0,
+          completed: 0,
+          total: 0,
+        });
+
+        // Create abort controller for this download
+        const abortController = new AbortController();
+        activeDownloads.set(model.apiModelId, abortController);
+
+        // Start the download in the background with progress tracking
+        (async () => {
+          try {
+            for await (const progress of pullModelWithProgress(model.apiModelId, abortController.signal)) {
+              downloadProgress.set(model.apiModelId, {
+                status: progress.status,
+                progress: progress.progress || 0,
+                completed: progress.completed || 0,
+                total: progress.total || 0,
+              });
+            }
+            // Download complete
+            downloadProgress.delete(model.apiModelId);
+            activeDownloads.delete(model.apiModelId);
+            logger.info('Model download completed', { modelId: model.apiModelId });
+          } catch (error) {
+            logger.error('Model download failed', {
+              modelId: model.apiModelId,
+              error: error instanceof Error ? error.message : 'Unknown',
+            });
+            downloadProgress.delete(model.apiModelId);
+            activeDownloads.delete(model.apiModelId);
+          }
+        })();
+
+        // Return immediately - client should poll /api/models/download/progress to check progress
+        return addCorsHeaders(Response.json({
+          success: true,
+          message: `Downloading ${model.name}. This may take several minutes.`,
+          modelId: model.apiModelId,
+        }));
+      } catch (error) {
+        logger.error('Failed to initiate model download', {
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to initiate model download' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // API endpoint to get model download progress
+    if (url.pathname.match(/^\/api\/models\/download\/progress\/.+$/) && req.method === 'GET') {
+      try {
+        const modelId = url.pathname.split('/').pop();
+        if (!modelId) {
+          return addCorsHeaders(Response.json(
+            { error: 'Model ID is required' },
+            { status: 400 }
+          ));
+        }
+
+        const progress = downloadProgress.get(decodeURIComponent(modelId));
+
+        if (!progress) {
+          // Not currently downloading
+          return addCorsHeaders(Response.json({
+            downloading: false,
+          }));
+        }
+
+        return addCorsHeaders(Response.json({
+          downloading: true,
+          ...progress,
+        }));
+      } catch (error) {
+        logger.error('Failed to get download progress', {
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to get download progress' },
+          { status: 500 }
+        ));
+      }
+    }
+
+    // API endpoint to cancel model download
+    if (url.pathname.match(/^\/api\/models\/download\/cancel\/.+$/) && req.method === 'POST') {
+      try {
+        const modelId = url.pathname.split('/').pop();
+        if (!modelId) {
+          return addCorsHeaders(Response.json(
+            { error: 'Model ID is required' },
+            { status: 400 }
+          ));
+        }
+
+        const decodedModelId = decodeURIComponent(modelId);
+        const abortController = activeDownloads.get(decodedModelId);
+
+        if (!abortController) {
+          return addCorsHeaders(Response.json(
+            { error: 'No active download for this model' },
+            { status: 404 }
+          ));
+        }
+
+        // Abort the download
+        abortController.abort();
+        activeDownloads.delete(decodedModelId);
+        downloadProgress.delete(decodedModelId);
+
+        logger.info('Model download cancelled', { modelId: decodedModelId });
+
+        return addCorsHeaders(Response.json({
+          success: true,
+          message: 'Download cancelled',
+        }));
+      } catch (error) {
+        logger.error('Failed to cancel download', {
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+        return addCorsHeaders(Response.json(
+          { error: 'Failed to cancel download' },
           { status: 500 }
         ));
       }

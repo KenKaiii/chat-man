@@ -51,7 +51,7 @@ Create a `.env` file in the project root:
 # Required
 NODE_ENV=production
 CHAT_MAN_PASSWORD=<your-strong-password>
-PORT=3001
+PORT=3010
 
 # Optional
 OLLAMA_BASE_URL=http://localhost:11434
@@ -194,7 +194,7 @@ chmod 600 data/sessions.db
 
 ```bash
 # Test login
-curl -X POST http://localhost:3001/api/auth/login \
+curl -X POST http://localhost:3010/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"password": "YourStrongPassword123!"}'
 
@@ -205,33 +205,33 @@ curl -X POST http://localhost:3001/api/auth/login \
 
 ```bash
 # Create a test backup
-curl -X POST http://localhost:3001/api/backup/create \
+curl -X POST http://localhost:3010/api/backup/create \
   -H "Content-Type: application/json"
 
 # List backups
-curl http://localhost:3001/api/backup/list
+curl http://localhost:3010/api/backup/list
 
 # Verify backup integrity
-curl -X POST http://localhost:3001/api/backup/verify/<backup-id>
+curl -X POST http://localhost:3010/api/backup/verify/<backup-id>
 
 # Test restore to temporary location
-curl -X POST http://localhost:3001/api/backup/test-restore/<backup-id>
+curl -X POST http://localhost:3010/api/backup/test-restore/<backup-id>
 ```
 
 ### Step 7: Configure Monitoring
 
 ```bash
 # Check system health
-curl http://localhost:3001/api/health/detailed
+curl http://localhost:3010/api/health/detailed
 
 # Check security metrics
-curl http://localhost:3001/api/security/metrics
+curl http://localhost:3010/api/security/metrics
 
 # View security alerts
-curl http://localhost:3001/api/security/alerts
+curl http://localhost:3010/api/security/alerts
 
 # Prometheus metrics endpoint
-curl http://localhost:3001/api/metrics/prometheus
+curl http://localhost:3010/api/metrics/prometheus
 ```
 
 ### Step 8: Start Production Server
@@ -251,7 +251,7 @@ User=chatman
 WorkingDirectory=/opt/chatman
 Environment="NODE_ENV=production"
 Environment="CHAT_MAN_PASSWORD=YourStrongPassword123!"
-Environment="PORT=3001"
+Environment="PORT=3010"
 ExecStart=/usr/bin/bun run server/server.ts
 Restart=always
 RestartSec=10
@@ -282,7 +282,7 @@ RUN bun install --production
 
 COPY . .
 
-EXPOSE 3001
+EXPOSE 3010
 
 CMD ["bun", "run", "server/server.ts"]
 ```
@@ -293,7 +293,7 @@ Build and run:
 docker build -t chatman:latest .
 docker run -d \
   --name chatman \
-  -p 3001:3001 \
+  -p 3010:3010 \
   -v /opt/chatman/data:/app/data \
   -v /opt/chatman/config:/app/config \
   -e CHAT_MAN_PASSWORD='YourStrongPassword123!' \
@@ -316,7 +316,7 @@ pm2 startup
 
 ```nginx
 upstream chatman {
-    server localhost:3001;
+    server localhost:3010;
 }
 
 server {
@@ -372,7 +372,7 @@ The system includes automated backups, but you should also configure off-site ba
 ### 1. Health Check
 
 ```bash
-curl http://localhost:3001/api/health/detailed | jq
+curl http://localhost:3010/api/health/detailed | jq
 ```
 
 Expected output:
@@ -404,20 +404,20 @@ Should show recent events with timestamps.
 
 ```bash
 # List backups
-curl http://localhost:3001/api/backup/list | jq
+curl http://localhost:3010/api/backup/list | jq
 
 # Test restore
-curl -X POST http://localhost:3001/api/backup/test-restore/<backup-id> | jq
+curl -X POST http://localhost:3010/api/backup/test-restore/<backup-id> | jq
 ```
 
 ### 4. Security Monitoring
 
 ```bash
 # Check for security alerts
-curl http://localhost:3001/api/security/alerts | jq
+curl http://localhost:3010/api/security/alerts | jq
 
 # View security metrics
-curl http://localhost:3001/api/security/metrics | jq
+curl http://localhost:3010/api/security/metrics | jq
 ```
 
 ## Monitoring and Maintenance
@@ -425,7 +425,7 @@ curl http://localhost:3001/api/security/metrics | jq
 ### Daily Tasks
 
 - Monitor application logs: `journalctl -u chatman -f` (systemd) or `pm2 logs chatman`
-- Check security alerts: `curl http://localhost:3001/api/security/alerts`
+- Check security alerts: `curl http://localhost:3010/api/security/alerts`
 - Verify backup creation: `ls -lh data/backups/`
 
 ### Weekly Tasks

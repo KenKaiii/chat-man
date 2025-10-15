@@ -1,5 +1,5 @@
 /**
- * Chat Man - Modern chat interface for Claude Agent SDK
+ * Chat Man - Modern chat interface with local AI models
  * Copyright (C) 2025 KenKai
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -21,11 +21,11 @@
 /**
  * Model Configuration
  *
- * Centralized definitions for all available AI models.
+ * Centralized definitions for all available local Ollama models.
  * Add new models here to make them available in the UI.
  */
 
-export type ProviderType = 'anthropic' | 'z-ai';
+export type ProviderType = 'ollama';
 
 export interface ModelConfig {
   id: string;
@@ -36,24 +36,54 @@ export interface ModelConfig {
 }
 
 /**
+ * Model status including download state
+ */
+export interface ModelStatus extends ModelConfig {
+  downloaded: boolean;
+}
+
+/**
  * Available Models
  *
- * Add new models to this array to make them available in the model selector.
+ * Optimized for business conversations, RAG, and document Q&A.
+ * Models selected for HIPAA/GDPR/CCPA compliant applications in medical,
+ * legal, real estate, and general business use cases.
  */
 export const AVAILABLE_MODELS: ModelConfig[] = [
   {
-    id: 'sonnet',
-    name: 'Claude Sonnet 4.5',
-    description: 'Anthropic\'s most intelligent model for complex agents and coding',
-    apiModelId: 'claude-sonnet-4-5-20250929',
-    provider: 'anthropic',
+    id: 'llama3.2:3b',
+    name: 'Llama 3.2 3B',
+    description: 'Fast baseline model for general business conversations (4-6GB RAM)',
+    apiModelId: 'llama3.2:3b',
+    provider: 'ollama',
   },
   {
-    id: 'glm-4.6',
-    name: 'GLM 4.6',
-    description: 'Z.AI\'s flagship model for powerful reasoning and coding',
-    apiModelId: 'glm-4.6',
-    provider: 'z-ai',
+    id: 'mistral:7b',
+    name: 'Mistral 7B',
+    description: 'Excellent for RAG, document Q&A, and customer service (8GB RAM)',
+    apiModelId: 'mistral:7b',
+    provider: 'ollama',
+  },
+  {
+    id: 'llama3.1:8b',
+    name: 'Llama 3.1 8B',
+    description: 'Advanced reasoning for complex business queries and conversations (8-10GB RAM)',
+    apiModelId: 'llama3.1:8b',
+    provider: 'ollama',
+  },
+  {
+    id: 'phi3:3.8b',
+    name: 'Phi-3 Mini',
+    description: 'Microsoft\'s lightweight model with strong reasoning (4-6GB RAM)',
+    apiModelId: 'phi3:3.8b',
+    provider: 'ollama',
+  },
+  {
+    id: 'gemma2:9b',
+    name: 'Gemma 2 9B',
+    description: 'Google\'s modern model with high performance for power users (10-12GB RAM)',
+    apiModelId: 'gemma2:9b',
+    provider: 'ollama',
   },
 ];
 

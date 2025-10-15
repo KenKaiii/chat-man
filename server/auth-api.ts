@@ -8,6 +8,8 @@ import { getPasswordManager } from './auth/passwordManager';
 import { getSessionManager } from './auth/sessionManager';
 import { getRateLimiter } from './auth/middleware';
 import { logger } from './utils/secureLogger';
+import { logAuditEvent } from './audit/auditLogger';
+import { AuditEventType } from './audit/auditEvents';
 
 /**
  * POST /api/auth/setup - Initial password setup
@@ -33,6 +35,11 @@ export async function handleAuthSetup(req: Request): Promise<Response> {
 
     logger.info('Initial password setup completed');
 
+    // Audit log successful setup
+    logAuditEvent(AuditEventType.AUTH_SETUP, 'SUCCESS', {
+      action: 'initial_password_setup',
+    });
+
     return Response.json({
       success: true,
       token,
@@ -41,6 +48,12 @@ export async function handleAuthSetup(req: Request): Promise<Response> {
   } catch (error) {
     logger.error('Auth setup failed', {
       error: error instanceof Error ? error.message : 'Unknown',
+    });
+
+    // Audit log failed setup
+    logAuditEvent(AuditEventType.AUTH_SETUP, 'FAILURE', {
+      action: 'initial_password_setup',
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
 
     return Response.json(
@@ -83,6 +96,13 @@ export async function handleAuthLogin(req: Request): Promise<Response> {
     rateLimiter.recordAttempt(ip, isValid);
 
     if (!isValid) {
+      // Audit log failed login
+      logAuditEvent(AuditEventType.AUTH_LOGIN_FAILED, 'FAILURE', {
+        action: 'login_attempt',
+        reason: 'invalid_password',
+        ip,
+      });
+
       return Response.json(
         { error: 'Invalid password' },
         { status: 401 }
@@ -95,6 +115,12 @@ export async function handleAuthLogin(req: Request): Promise<Response> {
 
     logger.info('User logged in successfully');
 
+    // Audit log successful login
+    logAuditEvent(AuditEventType.AUTH_LOGIN_SUCCESS, 'SUCCESS', {
+      action: 'login',
+      ip,
+    });
+
     return Response.json({
       success: true,
       token,
@@ -103,6 +129,13 @@ export async function handleAuthLogin(req: Request): Promise<Response> {
   } catch (error) {
     logger.error('Login failed', {
       error: error instanceof Error ? error.message : 'Unknown',
+    });
+
+    // Audit log authentication error
+    logAuditEvent(AuditEventType.ERROR_AUTHENTICATION, 'FAILURE', {
+      action: 'login',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      ip,
     });
 
     return Response.json(
@@ -126,6 +159,12 @@ export async function handleAuthChangePassword(req: Request): Promise<Response> 
     const success = await passwordManager.changePassword(oldPassword, newPassword);
 
     if (!success) {
+      // Audit log failed password change
+      logAuditEvent(AuditEventType.AUTH_PASSWORD_CHANGE, 'FAILURE', {
+        action: 'change_password',
+        reason: 'incorrect_old_password',
+      });
+
       return Response.json(
         { error: 'Incorrect old password' },
         { status: 401 }
@@ -134,6 +173,11 @@ export async function handleAuthChangePassword(req: Request): Promise<Response> 
 
     logger.info('Password changed successfully');
 
+    // Audit log successful password change
+    logAuditEvent(AuditEventType.AUTH_PASSWORD_CHANGE, 'SUCCESS', {
+      action: 'change_password',
+    });
+
     return Response.json({
       success: true,
       message: 'Password changed successfully',
@@ -141,6 +185,12 @@ export async function handleAuthChangePassword(req: Request): Promise<Response> 
   } catch (error) {
     logger.error('Password change failed', {
       error: error instanceof Error ? error.message : 'Unknown',
+    });
+
+    // Audit log password change error
+    logAuditEvent(AuditEventType.AUTH_PASSWORD_CHANGE, 'FAILURE', {
+      action: 'change_password',
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
 
     return Response.json(
@@ -169,6 +219,12 @@ export async function handleAuthRefresh(req: Request): Promise<Response> {
     const newToken = sessionManager.refreshSessionToken(token);
 
     if (!newToken) {
+      // Audit log session expiration
+      logAuditEvent(AuditEventType.AUTH_SESSION_EXPIRED, 'FAILURE', {
+        action: 'token_refresh',
+        reason: 'expired_or_invalid_token',
+      });
+
       return Response.json(
         { error: 'Cannot refresh token' },
         { status: 401 }

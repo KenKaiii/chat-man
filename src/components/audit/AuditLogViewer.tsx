@@ -70,7 +70,7 @@ export default function AuditLogViewer({ isOpen, onClose }: AuditLogViewerProps)
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
 
-      const response = await fetch(`http://localhost:3001/api/audit/logs?${params}`);
+      const response = await fetch(`http://localhost:3010/api/audit/logs?${params}`);
       const data = await response.json();
       setEvents(data.events || []);
       setTotal(data.total || 0);
@@ -84,7 +84,7 @@ export default function AuditLogViewer({ isOpen, onClose }: AuditLogViewerProps)
 
   const loadStats = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/audit/stats');
+      const response = await fetch('http://localhost:3010/api/audit/stats');
       const data = await response.json();
       setStats(data);
     } catch (error) {
@@ -94,7 +94,7 @@ export default function AuditLogViewer({ isOpen, onClose }: AuditLogViewerProps)
 
   const handleExport = async (filtered: boolean) => {
     try {
-      let url = 'http://localhost:3001/api/audit/export';
+      let url = 'http://localhost:3010/api/audit/export';
 
       if (filtered && (startDate || endDate)) {
         const params = new URLSearchParams();

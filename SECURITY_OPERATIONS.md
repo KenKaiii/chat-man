@@ -22,22 +22,22 @@ echo ""
 
 # 1. Check for new security alerts
 echo "1. Security Alerts (Last 24 hours):"
-curl -s http://localhost:3001/api/security/alerts?limit=100 | jq '.alerts[] | select(.timestamp > "'$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S)'") | {timestamp, severity, type, message}'
+curl -s http://localhost:3010/api/security/alerts?limit=100 | jq '.alerts[] | select(.timestamp > "'$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S)'") | {timestamp, severity, type, message}'
 
 # 2. Check authentication failures
 echo ""
 echo "2. Failed Login Attempts:"
-curl -s http://localhost:3001/api/security/metrics | jq '.failedLoginAttempts'
+curl -s http://localhost:3010/api/security/metrics | jq '.failedLoginAttempts'
 
 # 3. Verify system health
 echo ""
 echo "3. System Health:"
-curl -s http://localhost:3001/api/health/detailed | jq '{status, healthy}'
+curl -s http://localhost:3010/api/health/detailed | jq '{status, healthy}'
 
 # 4. Check last backup
 echo ""
 echo "4. Last Backup:"
-curl -s http://localhost:3001/api/backup/list | jq '.backups[0] | {id, timestamp, size}'
+curl -s http://localhost:3010/api/backup/list | jq '.backups[0] | {id, timestamp, size}'
 
 echo ""
 echo "=== Check Complete ==="
@@ -55,11 +55,11 @@ Check security alerts throughout the day:
 
 ```bash
 # View unresolved alerts
-curl http://localhost:3001/api/security/alerts?resolved=false | jq
+curl http://localhost:3010/api/security/alerts?resolved=false | jq
 
 # Filter by severity
-curl http://localhost:3001/api/security/alerts?severity=CRITICAL | jq
-curl http://localhost:3001/api/security/alerts?severity=HIGH | jq
+curl http://localhost:3010/api/security/alerts?severity=CRITICAL | jq
+curl http://localhost:3010/api/security/alerts?severity=HIGH | jq
 ```
 
 ## Security Alert Response Procedures
@@ -171,7 +171,7 @@ tail -n 100 data/audit/audit.log | jq
 
 2. Check for unusual API access patterns:
 ```bash
-curl http://localhost:3001/api/metrics | jq '.requests.byEndpoint'
+curl http://localhost:3010/api/metrics | jq '.requests.byEndpoint'
 ```
 
 3. Review active sessions:
@@ -246,7 +246,7 @@ export CHAT_MAN_PASSWORD="$NEW_PASSWORD"
 bun run server/auth/setup.ts
 
 # 3. Verify new password works
-curl -X POST http://localhost:3001/api/auth/login \
+curl -X POST http://localhost:3010/api/auth/login \
   -H "Content-Type: application/json" \
   -d "{\"password\": \"$NEW_PASSWORD\"}"
 
@@ -264,7 +264,7 @@ Rotate encryption keys annually or after suspected compromise:
 
 ```bash
 # 1. Backup current system
-curl -X POST http://localhost:3001/api/backup/create
+curl -X POST http://localhost:3010/api/backup/create
 
 # 2. Generate new encryption salt
 openssl rand -base64 32 > config/.encryption_salt.new
@@ -284,7 +284,7 @@ mv config/.encryption_salt.new config/.encryption_salt
 sudo systemctl start chatman
 
 # 7. Verify functionality
-curl http://localhost:3001/api/health/detailed
+curl http://localhost:3010/api/health/detailed
 
 # 8. Securely delete old salt
 shred -vfz -n 10 config/.encryption_salt.old
@@ -299,16 +299,16 @@ shred -vfz -n 10 config/.encryption_salt.old
 # Save as: scripts/verify-daily-backup.sh
 
 # Get today's backup
-BACKUP_ID=$(curl -s http://localhost:3001/api/backup/list | jq -r '.backups[0].id')
+BACKUP_ID=$(curl -s http://localhost:3010/api/backup/list | jq -r '.backups[0].id')
 
 echo "Verifying backup: $BACKUP_ID"
 
 # Verify integrity
-VERIFY_RESULT=$(curl -s -X POST http://localhost:3001/api/backup/verify/$BACKUP_ID)
+VERIFY_RESULT=$(curl -s -X POST http://localhost:3010/api/backup/verify/$BACKUP_ID)
 echo "Verification: $VERIFY_RESULT"
 
 # Test restore to temp location
-TEST_RESULT=$(curl -s -X POST http://localhost:3001/api/backup/test-restore/$BACKUP_ID)
+TEST_RESULT=$(curl -s -X POST http://localhost:3010/api/backup/test-restore/$BACKUP_ID)
 echo "Test Restore: $TEST_RESULT"
 
 # Alert if failed
@@ -395,7 +395,7 @@ Export logs for compliance reporting:
 
 ```bash
 # Export last 30 days
-curl "http://localhost:3001/api/audit/export?startDate=$(date -d '30 days ago' +%Y-%m-%d)&endDate=$(date +%Y-%m-%d)" \
+curl "http://localhost:3010/api/audit/export?startDate=$(date -d '30 days ago' +%Y-%m-%d)&endDate=$(date +%Y-%m-%d)" \
   > audit-export-$(date +%Y%m%d).json
 ```
 
@@ -440,7 +440,7 @@ echo "Audit logs archived: $ARCHIVE_DATE"
 
 ```bash
 # Trigger retention cleanup (deletes sessions older than maxSessionAgeDays)
-curl -X POST http://localhost:3001/api/compliance/retention/cleanup
+curl -X POST http://localhost:3010/api/compliance/retention/cleanup
 
 # View results in audit log
 grep "RETENTION_CLEANUP" data/audit/audit.log | tail -n 1 | jq
@@ -452,11 +452,11 @@ Export all data for a specific session:
 
 ```bash
 # List all sessions
-curl http://localhost:3001/api/sessions | jq
+curl http://localhost:3010/api/sessions | jq
 
 # Export specific session data
 SESSION_ID="<session-id>"
-curl http://localhost:3001/api/sessions/$SESSION_ID | jq > session-export-$SESSION_ID.json
+curl http://localhost:3010/api/sessions/$SESSION_ID | jq > session-export-$SESSION_ID.json
 
 # Include in audit log
 grep "SESSION_CREATE\|SESSION_DELETE" data/audit/audit.log | grep "$SESSION_ID" >> session-export-$SESSION_ID.json
@@ -469,7 +469,7 @@ Delete user data upon request:
 ```bash
 # Delete specific session
 SESSION_ID="<session-id>"
-curl -X DELETE http://localhost:3001/api/sessions/$SESSION_ID
+curl -X DELETE http://localhost:3010/api/sessions/$SESSION_ID
 
 # Verify deletion in audit log
 grep "SESSION_DELETE" data/audit/audit.log | grep "$SESSION_ID"
@@ -489,7 +489,7 @@ If using Prometheus for monitoring:
 scrape_configs:
   - job_name: 'chatman'
     static_configs:
-      - targets: ['localhost:3001']
+      - targets: ['localhost:3010']
     metrics_path: '/api/metrics/prometheus'
     scrape_interval: 30s
 ```
@@ -521,16 +521,16 @@ cat > $REPORT_FILE << EOF
 # Security Report - $MONTH
 
 ## Authentication Metrics
-$(curl -s http://localhost:3001/api/security/metrics | jq '.authentication')
+$(curl -s http://localhost:3010/api/security/metrics | jq '.authentication')
 
 ## Backup Statistics
-$(curl -s http://localhost:3001/api/metrics | jq '.backups')
+$(curl -s http://localhost:3010/api/metrics | jq '.backups')
 
 ## Security Alerts
-$(curl -s http://localhost:3001/api/security/alerts | jq '{total: .count, byType: [.alerts | group_by(.type) | .[] | {type: .[0].type, count: length}]}')
+$(curl -s http://localhost:3010/api/security/alerts | jq '{total: .count, byType: [.alerts | group_by(.type) | .[] | {type: .[0].type, count: length}]}')
 
 ## System Health
-$(curl -s http://localhost:3001/api/health/detailed | jq)
+$(curl -s http://localhost:3010/api/health/detailed | jq)
 
 ## Compliance Status
 - Audit logging: Enabled
@@ -551,17 +551,17 @@ When responding to HIPAA audits:
 
 1. Export all audit logs:
 ```bash
-curl http://localhost:3001/api/audit/export > hipaa-audit-logs.json
+curl http://localhost:3010/api/audit/export > hipaa-audit-logs.json
 ```
 
 2. Generate backup verification report:
 ```bash
-curl http://localhost:3001/api/backup/list | jq > hipaa-backup-report.json
+curl http://localhost:3010/api/backup/list | jq > hipaa-backup-report.json
 ```
 
 3. Export compliance status:
 ```bash
-curl http://localhost:3001/api/compliance/status | jq > hipaa-compliance-status.json
+curl http://localhost:3010/api/compliance/status | jq > hipaa-compliance-status.json
 ```
 
 4. Document security controls in place (see PRODUCTION_DEPLOYMENT.md)

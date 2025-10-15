@@ -126,8 +126,8 @@ chat-man/
 
 Chat Man runs entirely on localhost:
 
-- **WebSocket:** `ws://localhost:3001/ws`
-- **API Server:** `http://localhost:3001`
+- **WebSocket:** `ws://localhost:3010/ws`
+- **API Server:** `http://localhost:3010`
 - **Ollama:** `http://localhost:11434` (if used)
 
 ### DO NOT expose to network
@@ -138,9 +138,9 @@ If you need to access from other devices, use SSH tunneling instead:
 
 ```bash
 # From remote device
-ssh -L 3001:localhost:3001 user@your-machine
+ssh -L 3010:localhost:3010 user@your-machine
 
-# Then access http://localhost:3001 on remote device
+# Then access http://localhost:3010 on remote device
 ```
 
 ## Authentication

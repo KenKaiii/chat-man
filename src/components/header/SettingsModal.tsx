@@ -63,7 +63,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/settings');
+      const response = await fetch('http://localhost:3010/api/settings');
       const data = await response.json();
       setSettings(data);
     } catch (error) {
@@ -76,7 +76,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const loadBackups = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/backup/list');
+      const response = await fetch('http://localhost:3010/api/backup/list');
       const data = await response.json();
       setBackups(data.backups || []);
     } catch (error) {
@@ -87,7 +87,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const createBackup = async () => {
     try {
       setCreating(true);
-      const response = await fetch('http://localhost:3001/api/backup/create', {
+      const response = await fetch('http://localhost:3010/api/backup/create', {
         method: 'POST',
       });
       const data = await response.json();
@@ -109,7 +109,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (!confirm('Are you sure you want to delete this backup?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/backup/${backupId}`, {
+      const response = await fetch(`http://localhost:3010/api/backup/${backupId}`, {
         method: 'DELETE',
       });
       const data = await response.json();
@@ -129,7 +129,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (!confirm('Are you sure you want to restore this backup? Current data will be replaced.')) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/backup/restore/${backupId}`, {
+      const response = await fetch(`http://localhost:3010/api/backup/restore/${backupId}`, {
         method: 'POST',
       });
       const data = await response.json();
@@ -159,7 +159,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const exportAllData = async () => {
     try {
       setExporting(true);
-      const response = await fetch('http://localhost:3001/api/data/export');
+      const response = await fetch('http://localhost:3010/api/data/export');
       if (!response.ok) throw new Error('Export failed');
 
       const blob = await response.blob();
@@ -189,7 +189,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
     try {
       setDeleting(true);
-      const response = await fetch('http://localhost:3001/api/data/delete-all', {
+      const response = await fetch('http://localhost:3010/api/data/delete-all', {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Delete failed');

@@ -103,7 +103,7 @@ export const PrivacyNotice: React.FC<PrivacyNoticeProps> = ({ onAccept, onDeclin
         lineHeight: 1.6,
         marginBottom: '1rem'
       }}>
-        This notice explains how Chat Man processes and protects your data in compliance with GDPR and HIPAA regulations.
+        This notice explains how Chat Man processes and protects your data in compliance with GDPR, HIPAA, and CCPA regulations.
       </p>
 
       {/* Data Collection Section */}
@@ -259,6 +259,97 @@ export const PrivacyNotice: React.FC<PrivacyNoticeProps> = ({ onAccept, onDeclin
           <li><strong>Right to Erasure:</strong> <Trash2 style={{ width: '0.75rem', height: '0.75rem', display: 'inline', verticalAlign: 'middle' }} /> Delete individual or all data permanently</li>
           <li><strong>Right to Portability:</strong> Export and transfer your data</li>
         </ul>
+      </div>
+
+      {/* California Consumer Privacy Act (CCPA) Section */}
+      <div style={{
+        backgroundColor: 'rgba(147, 51, 234, 0.08)',
+        border: '1px solid rgba(147, 51, 234, 0.2)',
+        borderRadius: '0.5rem',
+        padding: '0.75rem',
+        marginBottom: '1rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <Shield style={{ width: '1rem', height: '1rem', color: '#C084FC' }} />
+          <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#C084FC' }}>
+            California Residents (CCPA)
+          </h4>
+        </div>
+        <p style={{
+          color: 'rgb(var(--text-secondary))',
+          lineHeight: 1.6,
+          fontSize: '0.75rem',
+          marginBottom: '0.625rem'
+        }}>
+          If you are a California resident, you have additional rights under the California Consumer Privacy Act (CCPA):
+        </p>
+
+        <div style={{ marginBottom: '0.625rem' }}>
+          <h5 style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#C084FC', marginBottom: '0.25rem' }}>
+            Personal Information Collected
+          </h5>
+          <ul style={{
+            listStyle: 'disc',
+            paddingLeft: '1.5rem',
+            color: 'rgb(var(--text-secondary))',
+            lineHeight: 1.6,
+            fontSize: '0.75rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.25rem'
+          }}>
+            <li><strong>Identifiers:</strong> Password hash, session tokens (locally stored only)</li>
+            <li><strong>Content:</strong> Chat messages, uploaded documents, conversation history</li>
+            <li><strong>Usage Data:</strong> Session timestamps, chat mode preferences</li>
+            <li><strong>Device Info:</strong> File paths for local database storage</li>
+          </ul>
+        </div>
+
+        <div style={{ marginBottom: '0.625rem' }}>
+          <h5 style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#C084FC', marginBottom: '0.25rem' }}>
+            Your CCPA Rights
+          </h5>
+          <ul style={{
+            listStyle: 'disc',
+            paddingLeft: '1.5rem',
+            color: 'rgb(var(--text-secondary))',
+            lineHeight: 1.6,
+            fontSize: '0.75rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.25rem'
+          }}>
+            <li><strong>Right to Know:</strong> Request details about personal information collected (available via Settings → Export Data)</li>
+            <li><strong>Right to Delete:</strong> Request deletion of your personal information (available via Settings → Delete All Data)</li>
+            <li><strong>Right to Non-Discrimination:</strong> Equal service regardless of exercising your privacy rights</li>
+            <li><strong>Right to Opt-Out:</strong> Opt out of &ldquo;sale&rdquo; of personal information (see below)</li>
+          </ul>
+        </div>
+
+        <div style={{
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          border: '1px solid rgba(34, 197, 94, 0.3)',
+          borderRadius: '0.375rem',
+          padding: '0.625rem',
+          marginTop: '0.625rem'
+        }}>
+          <h5 style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#4ADE80', marginBottom: '0.25rem' }}>
+            Do Not Sell My Personal Information
+          </h5>
+          <p style={{ color: '#4ADE80', lineHeight: 1.6, fontSize: '0.6875rem' }}>
+            <strong>We do NOT sell, share, or transmit your personal information to any third parties.</strong> All data remains stored locally on your device. We do not engage in any data sales or sharing activities as defined by the CCPA. This application processes data entirely offline.
+          </p>
+        </div>
+
+        <p style={{
+          color: 'rgb(var(--text-secondary))',
+          lineHeight: 1.6,
+          fontSize: '0.6875rem',
+          marginTop: '0.625rem',
+          fontStyle: 'italic'
+        }}>
+          To exercise your CCPA rights, use the data management features in the application settings. For questions, contact: <a href="mailto:privacy@chatman.local" style={{ color: '#C084FC', textDecoration: 'underline' }}>privacy@chatman.local</a>
+        </p>
       </div>
 
       {/* Data Controller */}
