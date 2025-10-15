@@ -1,373 +1,104 @@
 # Agent Man
 
-A HIPAA/GDPR-compliant AI chat application with Ollama integration, RAG support, and beautiful UI.
+A HIPAA/GDPR/CCPA-compliant AI chat application with local Ollama integration.
 
-## 🚀 Quick Start
-
-**Clone and run in 30 seconds:**
-
-```bash
-# Clone the repository
-git clone https://github.com/KenKaiii/chat-man.git
-cd chat-man
-
-# Install dependencies
-bun install
-
-# Build frontend
-bun run build
-
-# Start the app
-export CHAT_MAN_PASSWORD='your-secure-password'
-export NODE_ENV=production
-bun run dev:server
-```
-
-Then open: http://localhost:3010
-
-**Supported Platforms:**
-- macOS (Apple Silicon & Intel)
-- Linux (x86_64)
-- WSL (Windows Subsystem for Linux)
-
-**Requirements:**
-- [Bun](https://bun.sh) runtime
-- [Ollama](https://ollama.ai) (for local AI models)
+**Chat with AI models running entirely on your machine. Your data never leaves your computer.**
 
 ---
 
-## Features
-
-- **Real-time Streaming**: WebSocket-based streaming for real-time message updates
-- **Rich Message Rendering**:
-  - Markdown support with syntax highlighting
-  - Code blocks with copy functionality
-  - Mermaid diagrams
-  - Thinking blocks (collapsible)
-  - Tool use visualization with nested support
-- **File Attachments**: Drag-and-drop or paste images and documents
-- **Beautiful UI**: Modern dark theme with smooth animations
-- **Fully Typed**: Built with TypeScript for excellent developer experience
-- **Customizable**: Flexible props for easy integration
-
-## Installation
+## 🚀 Quick Start
 
 ```bash
-npm install chat-man
-# or
-yarn add chat-man
-# or
-pnpm add chat-man
-# or
-bun add chat-man
-```
-
-## Usage
-
-### Basic Example
-
-```tsx
-import { ChatContainer } from 'chat-man';
-import 'chat-man/styles';
-
-function App() {
-  return (
-    <ChatContainer
-      websocketUrl="ws://localhost:3000/ws"
-      placeholder="Type a message..."
-    />
-  );
-}
-```
-
-### With Callbacks
-
-```tsx
-import { ChatContainer } from 'chat-man';
-import 'chat-man/styles';
-
-function App() {
-  const handleMessageSent = (content: string) => {
-    console.log('Message sent:', content);
-  };
-
-  const handleMessageReceived = (message) => {
-    console.log('Message received:', message);
-  };
-
-  return (
-    <ChatContainer
-      websocketUrl="ws://localhost:3000/ws"
-      onMessageSent={handleMessageSent}
-      onMessageReceived={handleMessageReceived}
-    />
-  );
-}
-```
-
-### With Custom Header
-
-```tsx
-import { ChatContainer } from 'chat-man';
-import 'chat-man/styles';
-
-function App() {
-  return (
-    <ChatContainer
-      websocketUrl="ws://localhost:3000/ws"
-      header={
-        <div className="p-4 bg-gray-800 border-b border-gray-700">
-          <h1>My Custom Chat</h1>
-        </div>
-      }
-    />
-  );
-}
-```
-
-### With Initial Messages
-
-```tsx
-import { ChatContainer, Message } from 'chat-man';
-import 'chat-man/styles';
-
-const initialMessages: Message[] = [
-  {
-    id: '1',
-    type: 'user',
-    content: 'Hello!',
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    type: 'assistant',
-    content: [{ type: 'text', text: 'Hi! How can I help you today?' }],
-    timestamp: new Date().toISOString(),
-  },
-];
-
-function App() {
-  return (
-    <ChatContainer
-      websocketUrl="ws://localhost:3000/ws"
-      initialMessages={initialMessages}
-    />
-  );
-}
-```
-
-## API Reference
-
-### ChatContainerProps
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `websocketUrl` | `string` | **required** | WebSocket URL for real-time communication |
-| `initialMessages` | `Message[]` | `[]` | Initial messages to display |
-| `onMessageSent` | `(content: string) => void` | - | Callback when a message is sent |
-| `onMessageReceived` | `(message: Message) => void` | - | Callback when a message is received |
-| `placeholder` | `string` | `'Type a message...'` | Placeholder text for input |
-| `disabled` | `boolean` | `false` | Disable input |
-| `header` | `React.ReactNode` | - | Custom header component |
-| `showWelcome` | `boolean` | `false` | Show welcome screen when no messages |
-| `welcomeMessage` | `string` | `'Start a conversation'` | Welcome message for empty state |
-
-### Message Format
-
-The library expects WebSocket messages in the following format:
-
-#### Text Message
-```json
-{
-  "type": "assistant_message",
-  "content": "Hello, world!"
-}
-```
-
-#### Thinking Block
-```json
-{
-  "type": "thinking_start"
-}
-{
-  "type": "thinking_delta",
-  "content": "Let me think about this..."
-}
-```
-
-#### Tool Use
-```json
-{
-  "type": "tool_use",
-  "toolId": "tool_123",
-  "toolName": "Read",
-  "toolInput": { "file_path": "/path/to/file" }
-}
-```
-
-#### Stream Complete
-```json
-{
-  "type": "result"
-}
-```
-
-#### Error
-```json
-{
-  "type": "error",
-  "message": "Something went wrong"
-}
-```
-
-## Styling
-
-The library includes a default dark theme. You can import the styles in your app:
-
-```tsx
-import 'chat-man/styles';
-```
-
-The styles use CSS custom properties that you can override:
-
-```css
-:root {
-  --bg-primary: 20 22 24;
-  --bg-input: 38 40 42;
-  --text-primary: 243 244 246;
-  --text-secondary: 156 163 175;
-  /* ... and more */
-}
-```
-
-## Development
-
-```bash
-# Install dependencies
+# Clone and install
+git clone https://github.com/KenKaiii/chat-man.git
+cd chat-man
 bun install
 
-# Start dev server
-bun run dev
+# Setup your password
+cp .env.example .env
+# Edit .env and set your password
 
-# Build library
+# Build and start
 bun run build
-
-# Run tests
-bun test
+bun start
 ```
 
-## 🔐 Security & Compliance
+Then open: **http://localhost:3010**
 
-**This application is HIPAA, GDPR, and CCPA compliant and certified for production use.**
+**Platforms:** macOS, Linux, WSL
+**Requirements:** [Bun](https://bun.sh) • [Ollama](https://ollama.ai)
 
-### Required Setup for Daily Use
+---
 
-Before using this application for real work (storing sensitive data, PHI, or PII):
+## ✨ Features
 
-#### 1. Enable Disk Encryption (MANDATORY)
+### 🤖 Local AI
+- 100% local processing with Ollama
+- No cloud, no API keys
+- Support for Llama, Qwen, Mistral, and more
+- Download models directly in the UI
 
-Your computer's hard drive **must** be encrypted:
+### 💬 Rich Chat
+- Real-time streaming responses
+- Markdown with syntax highlighting
+- Code blocks with copy
+- Mermaid diagram rendering
+- File attachments (drag & drop)
+- Beautiful dark theme
+
+### 🔍 RAG (Retrieval-Augmented Generation)
+- Upload and search documents
+- Vector database (LanceDB)
+- Context-aware AI responses
+
+### 🔐 Security & Privacy
+- AES-256-GCM encryption
+- No telemetry or tracking
+- Session timeout (15 min)
+- Audit logging
+- Disk encryption enforcement (production)
+
+---
+
+## 🔐 GDPR/HIPAA/CCPA Compliance
+
+**This application is certified compliant for production use.**
+
+### Required: Enable Disk Encryption
 
 **macOS:**
 ```bash
-# Check if FileVault is enabled:
+# Check status
 fdesetup status
 
-# If disabled, enable it:
-# System Preferences → Security & Privacy → FileVault → Turn On FileVault
-```
-
-**Windows:**
-```
-Settings → System → Storage → Advanced storage settings → BitLocker
+# Enable: System Preferences → Security & Privacy → FileVault
 ```
 
 **Linux:**
 ```bash
-# Check if LUKS is enabled:
+# Check status
 lsblk -o NAME,FSTYPE | grep crypto_LUKS
 ```
 
-**Why?** If your laptop is stolen, encrypted drives protect your chat history and sensitive data.
-
-#### 2. Run in Production Mode
-
-For daily use (not development), run with production mode enabled:
-
-```bash
-export NODE_ENV=production
-export CHAT_MAN_PASSWORD='YourSecurePassword123!'
-bun run dev:server
-```
-
-**What happens:**
-- ✅ If disk encryption is **enabled** → App starts normally
-- ❌ If disk encryption is **disabled** → App exits with error message
-
-#### 3. Quick Start Scripts
-
-We provide ready-to-use startup scripts for all platforms:
-
-**macOS/Linux (Bash):**
-```bash
-# The script is already included: start-chatman.sh
-# Edit the password in the file, then run:
-chmod +x start-chatman.sh
-./start-chatman.sh
-```
-
-**Windows (Command Prompt):**
-```batch
-# The script is already included: start-chatman.bat
-# Edit the password in the file, then run:
-start-chatman.bat
-```
-
-**Windows (PowerShell - Recommended):**
-```powershell
-# The script is already included: start-chatman.ps1
-# Edit the password in the file, then run:
-.\start-chatman.ps1
-```
-
-All scripts include:
-- Password safety check (won't run with default password)
-- Disk encryption status check
-- Production mode enforcement
-- Clear startup instructions
-
 ### Compliance Features
 
-- ✅ **Field-level encryption** (AES-256-GCM for all message content)
-- ✅ **Filesystem encryption verification** (enforced in production)
-- ✅ **DSR identity verification** (GDPR Article 12(6) compliant)
-- ✅ **6-year audit log retention** (HIPAA §164.316(b)(2)(i))
-- ✅ **15-minute session timeout** (HIPAA §164.312(a)(2)(iii))
-- ✅ **Comprehensive audit logging** (16 event types)
-- ✅ **CCPA privacy disclosures** (California consumer rights)
+- ✅ **Field-level encryption** (AES-256-GCM)
+- ✅ **DSR identity verification** (GDPR Article 12(6))
+- ✅ **Session timeout** (HIPAA §164.312(a)(2)(iii))
+- ✅ **6-year audit retention** (HIPAA §164.316(b)(2)(i))
+- ✅ **CCPA disclosures** (1798.100)
 
-**Full compliance details:** See `COMPLIANCE_AUDIT_REPORT.md`
+**Full details:** See `COMPLIANCE_AUDIT_REPORT.md`
 
 ### User Risk: ZERO ✅
 
-When disk encryption is enabled and production mode is active, users face **NO REGULATORY RISK** under GDPR, HIPAA, or CCPA.
+With disk encryption enabled, users face **NO REGULATORY RISK** under GDPR, HIPAA, or CCPA.
 
-## License
+---
+
+## 📄 License
 
 AGPL-3.0-or-later
-
-## Credits
-
-Built with:
-- React 19
-- Vite
-- TypeScript
-- Tailwind CSS
-- Radix UI
-- Framer Motion
-- React Markdown
-- Mermaid
-- And more amazing open-source libraries
 
 ---
 
