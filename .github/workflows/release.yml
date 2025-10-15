@@ -1,0 +1,210 @@
+name: Build, Sign & Notarize Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-macos:
+    name: Build & Notarize macOS
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            platform: macos-arm64
+          - arch: x64
+            platform: macos-x86_64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build frontend
+        run: bun run build
+
+      - name: Build standalone binary
+        run: |
+          bun run build:standalone
+          mv agent-man agent-man-${{ matrix.platform }}
+
+      - name: Import Apple Developer Certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security import certificate.p12 \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Clean up
+          rm certificate.p12
+
+      - name: Sign binary
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --options runtime \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            --timestamp \
+            agent-man-${{ matrix.platform }}
+
+          # Verify signature
+          codesign --verify --verbose agent-man-${{ matrix.platform }}
+
+      - name: Create ZIP for notarization
+        run: |
+          zip agent-man-${{ matrix.platform }}.zip agent-man-${{ matrix.platform }}
+
+      - name: Notarize application
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Submit for notarization
+          xcrun notarytool submit agent-man-${{ matrix.platform }}.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          # Unzip and staple
+          unzip agent-man-${{ matrix.platform }}.zip
+          xcrun stapler staple agent-man-${{ matrix.platform }}
+
+          # Re-zip with stapled binary
+          rm agent-man-${{ matrix.platform }}.zip
+          zip agent-man-${{ matrix.platform }}.zip agent-man-${{ matrix.platform }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-man-${{ matrix.platform }}
+          path: agent-man-${{ matrix.platform }}.zip
+          retention-days: 7
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build frontend
+        run: bun run build
+
+      - name: Build standalone binary
+        run: |
+          bun run build:standalone
+          mv agent-man agent-man-linux-x86_64
+          chmod +x agent-man-linux-x86_64
+
+      - name: Create ZIP
+        run: |
+          zip agent-man-linux-x86_64.zip agent-man-linux-x86_64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-man-linux-x86_64
+          path: agent-man-linux-x86_64.zip
+          retention-days: 7
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-macos, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Agent Man ${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## 🚀 Install with one command:
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/kenkai/chat-man/main/install.sh | bash
+            ```
+
+            ## 📦 Or download manually:
+
+            - **macOS (Apple Silicon):** agent-man-macos-arm64.zip
+            - **macOS (Intel):** agent-man-macos-x86_64.zip
+            - **Linux:** agent-man-linux-x86_64.zip
+            - **WSL:** Use Linux version
+
+            ### Requirements:
+            - Ollama (installed automatically by install script)
+            - Disk encryption enabled (FileVault/LUKS)
+
+            All binaries are signed and notarized (macOS) for zero security warnings.
+          files: |
+            artifacts/agent-man-macos-arm64/agent-man-macos-arm64.zip
+            artifacts/agent-man-macos-x86_64/agent-man-macos-x86_64.zip
+            artifacts/agent-man-linux-x86_64/agent-man-linux-x86_64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

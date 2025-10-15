@@ -1,6 +1,38 @@
-# Chat Man
+# Agent Man
 
-A beautiful, reusable chat UI component library for React with real-time streaming, markdown rendering, code highlighting, and mermaid diagram support.
+A HIPAA/GDPR-compliant AI chat application with Ollama integration, RAG support, and beautiful UI.
+
+## 🚀 Quick Install
+
+**One command. Zero configuration needed:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kenkai/chat-man/main/install.sh | bash
+```
+
+**What it does:**
+- ✅ Detects your OS (macOS, Linux, WSL)
+- ✅ Installs Ollama (if needed)
+- ✅ Downloads Agent Man binary
+- ✅ Sets up encryption
+- ✅ Adds to PATH
+- ✅ Ready to use in 30 seconds
+
+**Supported Platforms:**
+- macOS (Apple Silicon & Intel)
+- Linux (x86_64)
+- WSL (Windows Subsystem for Linux)
+
+**Run it:**
+```bash
+export CHAT_MAN_PASSWORD='your-password'
+export NODE_ENV=production
+agent-man
+```
+
+Then open: http://localhost:3010
+
+---
 
 ## Features
 

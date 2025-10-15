@@ -27,6 +27,8 @@
     "start": "./start-dev.sh",
     "build": "vite build",
     "build:server": "bun build server/server.ts --outdir dist-server --target bun",
+    "build:production": "bun run build && bun run build:standalone",
+    "build:standalone": "bun build server/server.ts --compile --minify --sourcemap --outfile agent-man",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=100",

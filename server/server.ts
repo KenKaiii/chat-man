@@ -1134,6 +1134,31 @@ Bun.serve({
       }
     }
 
+    // Serve static files from dist/ directory (production mode)
+    try {
+      const { join } = await import('path');
+      const { existsSync } = await import('fs');
+
+      let filePath = join(process.cwd(), 'dist', url.pathname === '/' ? 'index.html' : url.pathname);
+
+      // If file doesn't exist, try adding .html extension
+      if (!existsSync(filePath) && !url.pathname.includes('.')) {
+        filePath = join(process.cwd(), 'dist', url.pathname + '.html');
+      }
+
+      // If still not found, serve index.html for client-side routing
+      if (!existsSync(filePath)) {
+        filePath = join(process.cwd(), 'dist', 'index.html');
+      }
+
+      if (existsSync(filePath)) {
+        const file = Bun.file(filePath);
+        return new Response(file);
+      }
+    } catch (_error) {
+      // Fall through to 404
+    }
+
     return new Response('Not found', { status: 404 });
   },
 
