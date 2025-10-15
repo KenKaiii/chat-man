@@ -7,7 +7,6 @@
 
 import { Database } from 'bun:sqlite';
 import { join } from 'path';
-import { logger } from '../utils/secureLogger';
 import type { DBMessage } from '../database';
 
 const DB_PATH = join(process.cwd(), 'data', 'sessions.db');

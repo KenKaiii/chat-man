@@ -775,7 +775,7 @@ export async function handleProcessDSRRequest(requestId: string): Promise<Respon
       );
     }
 
-    let result: Record<string, any>;
+    let result: Record<string, unknown>;
 
     // Process based on type
     switch (request.type) {

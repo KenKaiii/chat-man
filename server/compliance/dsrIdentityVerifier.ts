@@ -30,6 +30,35 @@ export interface VerificationToken {
 }
 
 /**
+ * Rate limit row interface
+ */
+interface RateLimitRow {
+  email: string;
+  request_count: number;
+  window_start: string;
+  last_request: string;
+}
+
+/**
+ * Database row interfaces
+ */
+interface VerificationTokenRow {
+  id: string;
+  email: string;
+  code: string;
+  dsr_request_id: string | null;
+  created_at: string;
+  expires_at: string;
+  verified_at: string | null;
+  attempts: number;
+  ip_address: string | null;
+}
+
+interface StatCountRow {
+  count: number;
+}
+
+/**
  * DSR Identity Verifier
  * Implements multi-factor verification for DSR requests
  */
@@ -114,7 +143,7 @@ export class DSRIdentityVerifier {
 
     const row = this.db.query(
       'SELECT * FROM verification_rate_limit WHERE email = ?'
-    ).get(email) as any;
+    ).get(email) as RateLimitRow | undefined;
 
     if (!row) {
       // First request from this email
@@ -271,11 +300,11 @@ export class DSRIdentityVerifier {
   verifyToken(
     tokenId: string,
     code: string,
-    ipAddress?: string
+    _ipAddress?: string
   ): { verified: boolean; error?: string; email?: string } {
     const token = this.db.query(
       'SELECT * FROM verification_tokens WHERE id = ?'
-    ).get(tokenId) as any;
+    ).get(tokenId) as VerificationTokenRow | undefined;
 
     if (!token) {
       logger.warn('DSR verification token not found', { tokenId: tokenId.substring(0, 8) + '...' });
@@ -411,9 +440,9 @@ export class DSRIdentityVerifier {
   isTokenVerified(tokenId: string): boolean {
     const token = this.db.query(
       'SELECT verified_at FROM verification_tokens WHERE id = ?'
-    ).get(tokenId) as any;
+    ).get(tokenId) as Pick<VerificationTokenRow, 'verified_at'> | undefined;
 
-    return token && token.verified_at !== null;
+    return !!token && token.verified_at !== null;
   }
 
   /**
@@ -422,7 +451,7 @@ export class DSRIdentityVerifier {
   getToken(tokenId: string): VerificationToken | null {
     const token = this.db.query(
       'SELECT * FROM verification_tokens WHERE id = ?'
-    ).get(tokenId) as any;
+    ).get(tokenId) as VerificationTokenRow | undefined;
 
     if (!token) return null;
 
@@ -472,21 +501,21 @@ export class DSRIdentityVerifier {
     };
 
     // Total tokens
-    const totalRow = this.db.query('SELECT COUNT(*) as count FROM verification_tokens').get() as any;
-    stats.totalTokens = totalRow.count;
+    const totalRow = this.db.query('SELECT COUNT(*) as count FROM verification_tokens').get() as StatCountRow | undefined;
+    stats.totalTokens = totalRow?.count || 0;
 
     // Verified tokens
     const verifiedRow = this.db.query(
       'SELECT COUNT(*) as count FROM verification_tokens WHERE verified_at IS NOT NULL'
-    ).get() as any;
-    stats.verifiedTokens = verifiedRow.count;
+    ).get() as StatCountRow | undefined;
+    stats.verifiedTokens = verifiedRow?.count || 0;
 
     // Expired tokens
     const now = new Date().toISOString();
     const expiredRow = this.db.query(
       'SELECT COUNT(*) as count FROM verification_tokens WHERE expires_at < ? AND verified_at IS NULL'
-    ).get(now) as any;
-    stats.expiredTokens = expiredRow.count;
+    ).get(now) as StatCountRow | undefined;
+    stats.expiredTokens = expiredRow?.count || 0;
 
     // Average verification time
     const timingRows = this.db.query(`

@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { SecurityAlert, AlertType, AlertSeverity, MonitoringConfig } from './types';
 import { logger } from '../utils/secureLogger';

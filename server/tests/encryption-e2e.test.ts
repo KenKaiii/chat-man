@@ -6,7 +6,6 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { Database } from 'bun:sqlite';
 import { join } from 'path';
 import { existsSync, unlinkSync, mkdirSync } from 'fs';
 import { KeyManager } from '../encryption/keyManager';
@@ -31,7 +30,7 @@ describe('Encryption End-to-End Test', () => {
     }
 
     // Override salt path for testing
-    (KeyManager as any).SALT_STORAGE_PATH = TEST_SALT_PATH;
+    (KeyManager as typeof KeyManager & { SALT_STORAGE_PATH: string }).SALT_STORAGE_PATH = TEST_SALT_PATH;
 
     //Initialize key manager
     keyManager = new KeyManager();

@@ -12,7 +12,6 @@ import { getKeyManager } from '../encryption/keyManager';
 import { getBackupManager } from '../backup/backupManager';
 import { getAuditLogger } from '../audit/auditLogger';
 import { checkOllamaHealth } from '../ollama';
-import { logger } from '../utils/secureLogger';
 
 export class HealthChecker {
   /**

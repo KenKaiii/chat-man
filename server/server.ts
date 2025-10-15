@@ -18,6 +18,7 @@ import { SessionDatabase } from './database';
 import { logger } from './utils/secureLogger';
 import { authenticateWebSocket, isAuthenticationRequired, authMiddleware } from './auth/middleware';
 import { getBackupManager } from './backup/backupManager';
+import { AuditSeverity } from './audit/auditEvents';
 import {
   handleAuthSetup,
   handleAuthLogin,
@@ -520,7 +521,7 @@ Bun.serve({
           offset,
           eventType,
           result,
-          severity: severity as any,
+          severity: severity as AuditSeverity | undefined,
           startDate,
           endDate,
           searchTerm,
@@ -1059,12 +1060,19 @@ Bun.serve({
         }
 
         const { getAlertManager } = await import('./monitoring/alertManager');
+        const { AlertSeverity: MonitoringAlertSeverity, AlertType } = await import('./monitoring/types');
         const alertManager = getAlertManager(settings.monitoring);
 
         const searchParams = url.searchParams;
         const limit = parseInt(searchParams.get('limit') || '50');
-        const severity = searchParams.get('severity') as any;
-        const type = searchParams.get('type') as any;
+        const severityParam = searchParams.get('severity');
+        const severity = severityParam && Object.values(MonitoringAlertSeverity).includes(severityParam as typeof MonitoringAlertSeverity[keyof typeof MonitoringAlertSeverity])
+          ? (severityParam as typeof MonitoringAlertSeverity[keyof typeof MonitoringAlertSeverity])
+          : undefined;
+        const typeParam = searchParams.get('type');
+        const type = typeParam && Object.values(AlertType).includes(typeParam as typeof AlertType[keyof typeof AlertType])
+          ? (typeParam as typeof AlertType[keyof typeof AlertType])
+          : undefined;
         const resolved = searchParams.get('resolved') === 'true' ? true : searchParams.get('resolved') === 'false' ? false : undefined;
 
         const alerts = alertManager.getAlerts({ limit, severity, type, resolved });

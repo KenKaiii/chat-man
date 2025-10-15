@@ -31,9 +31,9 @@ async function checkFileVault(): Promise<EncryptionStatus> {
       type: 'FileVault',
       details: stdout.trim(),
     };
-  } catch (error) {
+  } catch (_error) {
     logger.error('Failed to check FileVault status', {
-      error: error instanceof Error ? error.message : 'Unknown',
+      error: _error instanceof Error ? _error.message : 'Unknown',
     });
     return {
       enabled: false,
@@ -64,7 +64,7 @@ async function checkLUKS(): Promise<EncryptionStatus> {
         ? `LUKS encrypted volumes found:\n${stdout.trim()}`
         : 'No LUKS encrypted volumes found',
     };
-  } catch (error) {
+  } catch (_error) {
     // cryptsetup not found or permission denied
     return {
       enabled: false,
@@ -89,9 +89,9 @@ async function checkBitLocker(): Promise<EncryptionStatus> {
       type: 'BitLocker',
       details: stdout.trim(),
     };
-  } catch (error) {
+  } catch (_error) {
     logger.error('Failed to check BitLocker status', {
-      error: error instanceof Error ? error.message : 'Unknown',
+      error: _error instanceof Error ? _error.message : 'Unknown',
     });
     return {
       enabled: false,

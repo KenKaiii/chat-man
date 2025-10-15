@@ -221,7 +221,7 @@ export class SessionDatabase {
     const keyManager = getKeyManager();
 
     return rows.map((row) => {
-      let content: any;
+      let content: string | Array<{ type: string; text?: string }> | string[];
 
       // Check if message is encrypted (with explicit null/empty checks)
       if (
@@ -319,7 +319,7 @@ export class SessionDatabase {
     const keyManager = getKeyManager();
 
     return rows.map((row) => {
-      let content: any;
+      let content: string | Array<{ type: string; text?: string }> | string[];
 
       // Check if message is encrypted (with explicit null/empty checks)
       if (
@@ -398,7 +398,7 @@ export class SessionDatabase {
     const keyManager = getKeyManager();
 
     const messages = messagesRaw.map((row) => {
-      let content: any;
+      let content: string | Array<{ type: string; text?: string }> | string[];
 
       // Check if message is encrypted (with explicit null/empty checks)
       if (
@@ -452,7 +452,7 @@ export class SessionDatabase {
         type: row.type as 'user' | 'assistant',
         content,
         timestamp: row.timestamp,
-      } as any;
+      };
     }) as Array<Message & { session_id: string }>;
 
     logger.info('Exported all user data', {

@@ -111,7 +111,7 @@ export default function ComplianceModal({ isOpen, onClose }: ComplianceModalProp
       {/* Modal */}
       <div className="fixed inset-0 flex items-center justify-center z-[10000] p-4 pointer-events-none">
         <div
-          className="bg-gray-900 rounded-2xl shadow-xl border border-white/10 w-full max-w-2xl flex flex-col pointer-events-auto"
+          className="bg-gray-900 rounded-2xl shadow-xl border border-white/10 w-full max-w-2xl max-h-[90vh] flex flex-col pointer-events-auto"
           onClick={(e) => e.stopPropagation()}
         >
         {/* Header */}

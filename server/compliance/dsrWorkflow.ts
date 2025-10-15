@@ -55,6 +55,36 @@ export interface DSRRequest {
 }
 
 /**
+ * Database row interface for DSR requests
+ */
+interface DSRRequestRow {
+  id: string;
+  type: DSRType;
+  status: DSRStatus;
+  created_at: string;
+  updated_at: string;
+  due_date: string;
+  completed_at: string | null;
+  requester_info: string;
+  request_details: string;
+  response_data: string | null;
+  notes: string | null;
+}
+
+/**
+ * Statistics interfaces
+ */
+interface StatCountRow {
+  count: number;
+}
+
+interface StatGroupRow {
+  status?: string;
+  type?: string;
+  count: number;
+}
+
+/**
  * DSR Workflow Manager
  */
 export class DSRWorkflowManager {
@@ -103,8 +133,8 @@ export class DSRWorkflowManager {
    */
   createRequest(
     type: DSRType,
-    requesterInfo: Record<string, any>,
-    requestDetails: Record<string, any> = {}
+    requesterInfo: Record<string, unknown>,
+    requestDetails: Record<string, unknown> = {}
   ): DSRRequest {
     const id = crypto.randomUUID();
     const now = new Date();
@@ -159,7 +189,7 @@ export class DSRWorkflowManager {
    * Get DSR request by ID
    */
   getRequest(id: string): DSRRequest | null {
-    const row = this.db.query('SELECT * FROM dsr_requests WHERE id = ?').get(id) as any;
+    const row = this.db.query('SELECT * FROM dsr_requests WHERE id = ?').get(id) as DSRRequestRow | undefined;
     if (!row) return null;
 
     return {
@@ -181,7 +211,7 @@ export class DSRWorkflowManager {
     overdue?: boolean;
   }): DSRRequest[] {
     let query = 'SELECT * FROM dsr_requests WHERE 1=1';
-    const params: any[] = [];
+    const params: (string | DSRStatus)[] = [];
 
     if (filter?.status) {
       query += ' AND status = ?';
@@ -201,7 +231,7 @@ export class DSRWorkflowManager {
 
     query += ' ORDER BY created_at DESC';
 
-    const rows = this.db.query(query).all(...params) as any[];
+    const rows = this.db.query(query).all(...params) as DSRRequestRow[];
 
     return rows.map(row => ({
       ...row,
@@ -220,7 +250,7 @@ export class DSRWorkflowManager {
     id: string,
     status: DSRStatus,
     notes?: string,
-    responseData?: Record<string, any>
+    responseData?: Record<string, unknown>
   ): void {
     const now = new Date().toISOString();
     const completed_at = status === DSRStatus.COMPLETED ? now : null;
@@ -272,7 +302,7 @@ export class DSRWorkflowManager {
    * Process ACCESS request (GDPR Article 15)
    * Returns all user data in JSON format
    */
-  async processAccessRequest(id: string): Promise<Record<string, any>> {
+  async processAccessRequest(id: string): Promise<Record<string, unknown>> {
     this.updateStatus(id, DSRStatus.IN_PROGRESS, 'Processing access request');
 
     const db = getSessionDatabase();
@@ -314,7 +344,7 @@ export class DSRWorkflowManager {
    * Process ERASURE request (GDPR Article 17)
    * Permanently deletes all user data
    */
-  async processErasureRequest(id: string): Promise<Record<string, any>> {
+  async processErasureRequest(id: string): Promise<Record<string, unknown>> {
     this.updateStatus(id, DSRStatus.IN_PROGRESS, 'Processing erasure request');
 
     const db = getSessionDatabase();
@@ -359,7 +389,7 @@ export class DSRWorkflowManager {
    * Process PORTABILITY request (GDPR Article 20)
    * Returns data in machine-readable format
    */
-  async processPortabilityRequest(id: string): Promise<Record<string, any>> {
+  async processPortabilityRequest(id: string): Promise<Record<string, unknown>> {
     this.updateStatus(id, DSRStatus.IN_PROGRESS, 'Processing portability request');
 
     const db = getSessionDatabase();
@@ -404,9 +434,10 @@ export class DSRWorkflowManager {
   /**
    * Get statistics
    */
-  getStatistics(): Record<string, any> {
+  getStatistics(): Record<string, unknown> {
+    const totalRow = this.db.query('SELECT COUNT(*) as count FROM dsr_requests').get() as StatCountRow | undefined;
     const stats = {
-      total: this.db.query('SELECT COUNT(*) as count FROM dsr_requests').get() as { count: number },
+      total: totalRow?.count || 0,
       byStatus: {} as Record<string, number>,
       byType: {} as Record<string, number>,
       overdue: this.getOverdueRequests().length,
@@ -414,15 +445,19 @@ export class DSRWorkflowManager {
     };
 
     // Count by status
-    const statusRows = this.db.query('SELECT status, COUNT(*) as count FROM dsr_requests GROUP BY status').all() as Array<{ status: string; count: number }>;
+    const statusRows = this.db.query('SELECT status, COUNT(*) as count FROM dsr_requests GROUP BY status').all() as StatGroupRow[];
     for (const row of statusRows) {
-      stats.byStatus[row.status] = row.count;
+      if (row.status) {
+        stats.byStatus[row.status] = row.count;
+      }
     }
 
     // Count by type
-    const typeRows = this.db.query('SELECT type, COUNT(*) as count FROM dsr_requests GROUP BY type').all() as Array<{ type: string; count: number }>;
+    const typeRows = this.db.query('SELECT type, COUNT(*) as count FROM dsr_requests GROUP BY type').all() as StatGroupRow[];
     for (const row of typeRows) {
-      stats.byType[row.type] = row.count;
+      if (row.type) {
+        stats.byType[row.type] = row.count;
+      }
     }
 
     // Calculate average processing time for completed requests

@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import { existsSync, statSync } from 'fs';
 import { join } from 'path';
 import { getKeyManager } from '../encryption/keyManager';
@@ -174,7 +174,7 @@ describe('GDPR Compliance Tests', () => {
 
     test('Backup encryption is enabled', () => {
       const backupManager = getBackupManager();
-      const backups = backupManager.listBackups();
+      backupManager.listBackups();
 
       // Backups should exist or system should be configured
       expect(backupManager).toBeDefined();
@@ -431,7 +431,7 @@ describe('DSR Workflow Integration Tests', () => {
     expect(stats.byStatus).toBeDefined();
     expect(stats.byType).toBeDefined();
 
-    console.log(`✓ DSR: Statistics functional (${stats.total.count} requests)`);
+    console.log(`✓ DSR: Statistics functional (${(stats.total as number) || 0} requests)`);
   });
 });
 

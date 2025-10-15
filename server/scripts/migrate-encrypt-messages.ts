@@ -42,7 +42,7 @@ async function migrateEncryptMessages(): Promise<MigrationReport> {
   try {
     await ensureEncryptionUnlocked();
     console.log('✅ Encryption system initialized\n');
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ ERROR: Failed to initialize encryption');
     console.error('Please ensure CHAT_MAN_PASSWORD environment variable is set.\n');
     process.exit(1);

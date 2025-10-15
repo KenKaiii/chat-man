@@ -332,7 +332,7 @@ async function runSecurityChecks(report: ReadinessReport): Promise<void> {
     const encryptionVerifier = await import('../utils/encryptionVerifier');
     // Check if the function exists (it may not be implemented yet)
     if ('checkFilesystemEncryption' in encryptionVerifier) {
-      const fsEncryption = await (encryptionVerifier as any).checkFilesystemEncryption();
+      const fsEncryption = await (encryptionVerifier as { checkFilesystemEncryption: () => Promise<{ enabled: boolean; type?: string }> }).checkFilesystemEncryption();
 
       addCheck(report, {
         name: 'Filesystem encryption',
@@ -506,7 +506,7 @@ async function runHealthChecks(report: ReadinessReport): Promise<void> {
       name: 'DSR workflow operational',
       category: 'health',
       status: 'pass',
-      message: `DSR system active (${stats.total.count} requests)`,
+      message: `DSR system active (${(stats.total as number) || 0} requests)`,
       blocker: false,
     });
   } catch (error) {

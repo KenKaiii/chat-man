@@ -19,7 +19,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Send, Plus, X, Square } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 import type { FileAttachment } from '../message/types';
 import { ModeSelector } from './ModeSelector';
 import { ModeIndicator } from './ModeIndicator';
@@ -50,7 +50,7 @@ const CAPABILITIES = [
 ];
 
 export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, disabled, isGenerating, isPlanMode, onTogglePlanMode, availableCommands = [] }: NewChatWelcomeProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const _fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<FileAttachment[]>([]);
 
@@ -205,136 +205,139 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
     setAttachedFiles([]);
   };
 
-  const handleFileClick = () => {
-    fileInputRef.current?.click();
-  };
+  // TODO: Re-enable when we have vision model support or file handling strategy for agents
+  // const _handleFileClick = () => {
+  //   fileInputRef.current?.click();
+  // };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  // const _handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const files = Array.from(e.target.files || []);
 
-    // Only take the first file (max 1 at a time)
-    if (files.length === 0) return;
-    const file = files[0];
+  //   // Only take the first file (max 1 at a time)
+  //   if (files.length === 0) return;
+  //   const file = files[0];
 
-    const fileData: FileAttachment = {
-      id: `${Date.now()}-${Math.random()}`,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    };
+  //   const fileData: FileAttachment = {
+  //     id: `${Date.now()}-${Math.random()}`,
+  //     name: file.name,
+  //     size: file.size,
+  //     type: file.type,
+  //   };
 
-    // Read all files as base64 (for images and documents)
-    const reader = new FileReader();
-    const preview = await new Promise<string>((resolve) => {
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.readAsDataURL(file);
-    });
-    fileData.preview = preview;
+  //   // Read all files as base64 (for images and documents)
+  //   const reader = new FileReader();
+  //   const preview = await new Promise<string>((resolve) => {
+  //     reader.onload = (e) => resolve(e.target?.result as string);
+  //     reader.readAsDataURL(file);
+  //   });
+  //   fileData.preview = preview;
 
-    // Replace existing files (max 1 at a time)
-    setAttachedFiles([fileData]);
+  //   // Replace existing files (max 1 at a time)
+  //   setAttachedFiles([fileData]);
 
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  //   // Reset file input
+  //   if (fileInputRef.current) {
+  //     fileInputRef.current.value = '';
+  //   }
+  // };
 
-  const handleRemoveFile = (id: string) => {
-    setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
-  };
+  // const _handleRemoveFile = (id: string) => {
+  //   setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
+  // };
 
   // Drag and drop handlers
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
+  // const _handleDragEnter = (e: React.DragEvent) => {
+  //   e.preventDefault();
+  //   e.stopPropagation();
+  // };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
+  // const _handleDragOver = (e: React.DragEvent) => {
+  //   e.preventDefault();
+  //   e.stopPropagation();
+  // };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
+  // const _handleDragLeave = (e: React.DragEvent) => {
+  //   e.preventDefault();
+  //   e.stopPropagation();
+  // };
 
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  // const _handleDrop = async (e: React.DragEvent) => {
+  //   e.preventDefault();
+  //   e.stopPropagation();
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
+  //   const files = Array.from(e.dataTransfer.files);
+  //   if (files.length === 0) return;
 
-    // Only take the first file (max 1 at a time)
-    const file = files[0];
+  //   // Only take the first file (max 1 at a time)
+  //   const file = files[0];
 
-    const fileData: FileAttachment = {
-      id: `${Date.now()}-${Math.random()}`,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    };
+  //   const fileData: FileAttachment = {
+  //     id: `${Date.now()}-${Math.random()}`,
+  //     name: file.name,
+  //     size: file.size,
+  //     type: file.type,
+  //   };
 
-    // Read all files as base64
-    const reader = new FileReader();
-    const preview = await new Promise<string>((resolve) => {
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.readAsDataURL(file);
-    });
-    fileData.preview = preview;
+  //   // Read all files as base64
+  //   const reader = new FileReader();
+  //   const preview = await new Promise<string>((resolve) => {
+  //     reader.onload = (e) => resolve(e.target?.result as string);
+  //     reader.readAsDataURL(file);
+  //   });
+  //   fileData.preview = preview;
 
-    // Replace existing files (max 1 at a time)
-    setAttachedFiles([fileData]);
-  };
+  //   // Replace existing files (max 1 at a time)
+  //   setAttachedFiles([fileData]);
+  // };
 
   // Handle paste events for images (screenshots)
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    const items = Array.from(e.clipboardData.items);
-    const imageItems = items.filter(item => item.type.startsWith('image/'));
+  // TODO: Re-enable when we have vision model support or file handling strategy for agents
+  // const _handlePaste = async (e: React.ClipboardEvent) => {
+  //   const items = Array.from(e.clipboardData.items);
+  //   const imageItems = items.filter(item => item.type.startsWith('image/'));
 
-    if (imageItems.length === 0) return;
+  //   if (imageItems.length === 0) return;
 
-    e.preventDefault();
+  //   e.preventDefault();
 
-    // Only take the first pasted image (max 1 at a time)
-    const item = imageItems[0];
-    const file = item.getAsFile();
-    if (!file) return;
+  //   // Only take the first pasted image (max 1 at a time)
+  //   const item = imageItems[0];
+  //   const file = item.getAsFile();
+  //   if (!file) return;
 
-    const fileData: FileAttachment = {
-      id: `${Date.now()}-${Math.random()}`,
-      name: `pasted-image-${Date.now()}.${file.type.split('/')[1]}`,
-      size: file.size,
-      type: file.type,
-    };
+  //   const fileData: FileAttachment = {
+  //     id: `${Date.now()}-${Math.random()}`,
+  //     name: `pasted-image-${Date.now()}.${file.type.split('/')[1]}`,
+  //     size: file.size,
+  //     type: file.type,
+  //   };
 
-    // Read as base64
-    const reader = new FileReader();
-    const preview = await new Promise<string>((resolve) => {
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.readAsDataURL(file);
-    });
-    fileData.preview = preview;
+  //   // Read as base64
+  //   const reader = new FileReader();
+  //   const preview = await new Promise<string>((resolve) => {
+  //     reader.onload = (e) => resolve(e.target?.result as string);
+  //     reader.readAsDataURL(file);
+  //   });
+  //   fileData.preview = preview;
 
-    // Replace existing files (max 1 at a time)
-    setAttachedFiles([fileData]);
-  };
+  //   // Replace existing files (max 1 at a time)
+  //   setAttachedFiles([fileData]);
+  // };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  // const _formatFileSize = (bytes: number): string => {
+  //   if (bytes < 1024) return `${bytes} B`;
+  //   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  //   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  // };
 
   return (
     <div
       className="flex-1 flex items-center justify-center w-full"
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      // TODO: Re-enable when we have file handling strategy for agents
+      // onDragEnter={handleDragEnter}
+      // onDragOver={handleDragOver}
+      // onDragLeave={handleDragLeave}
+      // onDrop={handleDrop}
     >
       <div className="w-full max-w-4xl px-4">
         {/* Greeting */}
@@ -388,7 +391,8 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex gap-1.5 w-full">
             <div className="flex-1 flex flex-col relative w-full rounded-xl border-b-2 border-white/10 transition hover:bg-[#374151]" style={{ backgroundColor: 'rgb(38, 40, 42)' }}>
               {/* File attachments preview */}
-              {attachedFiles.length > 0 && (
+              {/* TODO: Re-enable when we have file handling strategy for agents */}
+              {/* {attachedFiles.length > 0 && (
                 <div className="flex flex-wrap gap-2 items-center mx-2 mt-2.5 -mb-1">
                   {attachedFiles.map((file) => (
                     <button
@@ -397,7 +401,7 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
                       className="flex relative gap-1 items-center p-1.5 w-60 text-left bg-gray-800 rounded-2xl border border-gray-700 group"
                     >
                       {/* Preview thumbnail */}
-                      <div className="flex justify-center items-center">
+                      {/* <div className="flex justify-center items-center">
                         <div className="overflow-hidden relative flex-shrink-0 w-12 h-12 rounded-lg border border-gray-700">
                           {file.preview && file.type.startsWith('image/') ? (
                             <img
@@ -412,10 +416,10 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
                             </div>
                           )}
                         </div>
-                      </div>
+                      </div> */}
 
                       {/* File info */}
-                      <div className="flex flex-col justify-center px-2.5 -space-y-0.5 flex-1 min-w-0 overflow-hidden">
+                      {/* <div className="flex flex-col justify-center px-2.5 -space-y-0.5 flex-1 min-w-0 overflow-hidden">
                         <div className="mb-1 text-sm font-medium text-gray-100 truncate w-full">
                           {file.name}
                         </div>
@@ -423,10 +427,10 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
                           <span>File</span>
                           <span className="capitalize">{formatFileSize(file.size)}</span>
                         </div>
-                      </div>
+                      </div> */}
 
                       {/* Remove button */}
-                      <div className="absolute -top-1 -right-1">
+                      {/* <div className="absolute -top-1 -right-1">
                         <button
                           onClick={() => handleRemoveFile(file.id)}
                           className="invisible text-black bg-white rounded-full border border-white transition group-hover:visible"
@@ -438,7 +442,7 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
                     </button>
                   ))}
                 </div>
-              )}
+              )} */}
 
               {/* Textarea */}
               <div className="overflow-hidden relative px-2.5">
@@ -469,7 +473,7 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
                   value={inputValue}
                   onChange={(e) => onInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  onPaste={handlePaste}
+                  // onPaste={handlePaste} // TODO: Re-enable when file handling is ready
                   placeholder="How can I help you today?"
                   className="px-1 pt-3 w-full text-sm bg-transparent resize-none scrollbar-hidden outline-hidden placeholder:text-white/40"
                   style={{
@@ -488,7 +492,8 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
               <div className="flex justify-between items-center mx-3.5 mt-1.5 mb-3.5 max-w-full">
                 <div className="self-end flex items-center gap-1.5">
                   {/* File Upload */}
-                  <div className="flex gap-1">
+                  {/* TODO: Re-enable when we have file handling strategy for agents */}
+                  {/* <div className="flex gap-1">
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -504,7 +509,7 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
                       aria-label="Upload files"
                     >
                       <Plus className="size-5" />
-                    </button>
+                    </button> */}
 
                     {/* Plan Mode toggle button */}
                     {onTogglePlanMode && (
@@ -523,7 +528,7 @@ export function NewChatWelcome({ inputValue, onInputChange, onSubmit, onStop, di
                         Plan Mode
                       </button>
                     )}
-                  </div>
+                  {/* </div> */}
                 </div>
 
                 {/* Send/Stop Button */}
