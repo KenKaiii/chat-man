@@ -82,6 +82,13 @@ async function processPDF(filePath: string): Promise<{ text: string; pageCount: 
       console.log('PDF appears to be scanned (minimal text found), attempting OCR...');
 
       try {
+        // Explicitly set worker count to avoid initialization errors
+        // @ts-expect-error - opt is exported but not in type definitions
+        if (!scribe.opt.workerN) {
+          // @ts-expect-error - opt is exported but not in type definitions
+          scribe.opt.workerN = 4; // Use 4 workers for OCR
+        }
+
         const ocrText = await scribe.extractText([filePath]);
 
         if (ocrText && ocrText.trim().length > 0) {
@@ -126,6 +133,13 @@ async function processImage(filePath: string): Promise<string> {
   console.log('Processing image with OCR...');
 
   try {
+    // Explicitly set worker count to avoid initialization errors
+    // @ts-expect-error - opt is exported but not in type definitions
+    if (!scribe.opt.workerN) {
+      // @ts-expect-error - opt is exported but not in type definitions
+      scribe.opt.workerN = 4; // Use 4 workers for OCR
+    }
+
     const ocrText = await scribe.extractText([filePath]);
 
     if (ocrText && ocrText.trim().length > 0) {
