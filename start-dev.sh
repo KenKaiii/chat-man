@@ -33,14 +33,38 @@ if ! command -v ollama &> /dev/null; then
 
     # Detect OS and provide platform-specific instructions
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macOS: Download from https://ollama.ai/download/mac"
+        # macOS - try homebrew first
+        if command -v brew &> /dev/null; then
+            echo "macOS: Installing Ollama via Homebrew..."
+            if brew install ollama; then
+                echo "✅ Ollama installed"
+            else
+                echo "❌ Failed. Manual install: https://ollama.ai/download/mac"
+                exit 1
+            fi
+        else
+            echo "macOS: Install with 'brew install ollama' or download from https://ollama.ai/download/mac"
+            exit 1
+        fi
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "Linux: curl -fsSL https://ollama.ai/install.sh | sh"
+        echo "Linux: Installing Ollama..."
+        if curl -fsSL https://ollama.ai/install.sh | sh; then
+            export PATH="$HOME/.ollama/bin:/usr/local/bin:$PATH"
+            echo "✅ Ollama installed"
+        else
+            echo "❌ Failed. Manual install: https://ollama.ai"
+            exit 1
+        fi
     else
         echo "Download from: https://ollama.ai"
+        exit 1
     fi
 
-    exit 1
+    # Re-check if ollama is available after installation
+    if ! command -v ollama &> /dev/null; then
+        echo "Please install Ollama and try again"
+        exit 1
+    fi
 fi
 
 # Start Ollama
