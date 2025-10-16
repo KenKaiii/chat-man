@@ -83,7 +83,6 @@ async function processPDF(filePath: string): Promise<{ text: string; pageCount: 
 
       try {
         const ocrText = await scribe.extractText([filePath]);
-        await scribe.terminate(); // Clean up scribe resources
 
         if (ocrText && ocrText.trim().length > 0) {
           console.log(`OCR successful: extracted ${ocrText.length} characters`);
@@ -128,7 +127,6 @@ async function processImage(filePath: string): Promise<string> {
 
   try {
     const ocrText = await scribe.extractText([filePath]);
-    await scribe.terminate(); // Clean up scribe resources
 
     if (ocrText && ocrText.trim().length > 0) {
       console.log(`OCR successful: extracted ${ocrText.length} characters from image`);
