@@ -30,8 +30,16 @@ export class SessionManager {
 
   constructor() {
     // Generate JWT secret from encryption key manager
-    const keyManager = getKeyManager();
-    this.jwtSecret = keyManager.generateJWTSecret();
+    // If key manager isn't initialized yet, use a temporary generated secret
+    try {
+      const keyManager = getKeyManager();
+      this.jwtSecret = keyManager.generateJWTSecret();
+    } catch (_error) {
+      // Key manager not initialized yet - generate temporary secret
+      // This will be replaced once key manager is properly initialized
+      this.jwtSecret = crypto.randomBytes(64).toString('base64');
+      logger.warn('Using temporary JWT secret - key manager not initialized');
+    }
   }
 
   /**
@@ -204,8 +212,14 @@ export class SessionManager {
    */
   revokeAllSessions(): void {
     // Re-generate JWT secret
-    const keyManager = getKeyManager();
-    this.jwtSecret = keyManager.generateJWTSecret();
+    try {
+      const keyManager = getKeyManager();
+      this.jwtSecret = keyManager.generateJWTSecret();
+    } catch (_error) {
+      // Key manager not initialized - generate new temporary secret
+      this.jwtSecret = crypto.randomBytes(64).toString('base64');
+      logger.warn('Using temporary JWT secret for session revocation');
+    }
 
     logger.warn('All sessions revoked - JWT secret rotated');
   }
