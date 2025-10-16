@@ -2,9 +2,11 @@
 
 # Agent Man - Development Server (Frontend + Backend)
 
-# Load .env file if it exists
+# Load .env file if it exists (cross-platform compatible)
 if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+    set -a
+    source .env
+    set +a
 fi
 
 PIDFILE=".dev-pids"
@@ -32,10 +34,20 @@ if ! command -v ollama &> /dev/null; then
 fi
 
 # Start Ollama
-if ! pgrep -x "ollama" > /dev/null; then
-    ollama serve > /dev/null 2>&1 &
-    echo "$! Ollama" >> "$PIDFILE"
-    sleep 2
+# Use pgrep if available, otherwise check with ps (for systems without pgrep)
+if command -v pgrep > /dev/null 2>&1; then
+    if ! pgrep -x "ollama" > /dev/null 2>&1; then
+        ollama serve > /dev/null 2>&1 &
+        echo "$! Ollama" >> "$PIDFILE"
+        sleep 2
+    fi
+else
+    # Fallback for systems without pgrep (rare, but defensive)
+    if ! ps aux | grep -v grep | grep -q "ollama serve"; then
+        ollama serve > /dev/null 2>&1 &
+        echo "$! Ollama" >> "$PIDFILE"
+        sleep 2
+    fi
 fi
 
 # Start Backend
