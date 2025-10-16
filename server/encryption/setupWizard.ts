@@ -7,6 +7,8 @@
 
 import { getKeyManager } from './keyManager';
 import * as readline from 'readline';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
 
 /**
  * Interactive CLI setup wizard for encryption
@@ -36,49 +38,81 @@ export class EncryptionSetupWizard {
    * Prompt for password (hide input)
    */
   private async questionHidden(prompt: string): Promise<string> {
-    // Note: In a real implementation, you'd use a library like 'read' for hidden input
-    // For now, we'll simulate it (Bun/Node doesn't have native hidden input without libs)
     process.stdout.write(prompt);
 
     return new Promise((resolve) => {
       const stdin = process.stdin;
-      stdin.setRawMode(true);
-      stdin.resume();
-      stdin.setEncoding('utf8');
 
-      let password = '';
+      // Check if stdin is a TTY and setRawMode is available
+      if (stdin.isTTY && typeof stdin.setRawMode === 'function') {
+        // Use raw mode for hidden input (shows asterisks)
+        stdin.setRawMode(true);
+        stdin.resume();
+        stdin.setEncoding('utf8');
 
-      const onData = (char: string) => {
-        switch (char) {
-          case '\n':
-          case '\r':
-          case '\u0004': // Ctrl+D
-            stdin.setRawMode(false);
-            stdin.pause();
-            stdin.removeListener('data', onData);
-            process.stdout.write('\n');
-            resolve(password);
-            break;
-          case '\u0003': // Ctrl+C
-            stdin.setRawMode(false);
-            stdin.pause();
-            process.exit(0);
-            break;
-          case '\u007f': // Backspace
-            if (password.length > 0) {
-              password = password.slice(0, -1);
-              process.stdout.write('\b \b');
-            }
-            break;
-          default:
-            password += char;
-            process.stdout.write('*');
-            break;
-        }
-      };
+        let password = '';
 
-      stdin.on('data', onData);
+        const onData = (char: string) => {
+          switch (char) {
+            case '\n':
+            case '\r':
+            case '\u0004': // Ctrl+D
+              stdin.setRawMode(false);
+              stdin.pause();
+              stdin.removeListener('data', onData);
+              process.stdout.write('\n');
+              resolve(password);
+              break;
+            case '\u0003': // Ctrl+C
+              stdin.setRawMode(false);
+              stdin.pause();
+              process.exit(0);
+              break;
+            case '\u007f': // Backspace
+              if (password.length > 0) {
+                password = password.slice(0, -1);
+                process.stdout.write('\b \b');
+              }
+              break;
+            default:
+              password += char;
+              process.stdout.write('*');
+              break;
+          }
+        };
+
+        stdin.on('data', onData);
+      } else {
+        // Fallback to readline (visible input)
+        console.warn('\n⚠️  Warning: Password input will be VISIBLE (not running in TTY mode)');
+        this.rl.question('', (answer) => {
+          resolve(answer);
+        });
+      }
     });
+  }
+
+  /**
+   * Save password to .env file automatically for convenience
+   */
+  private savePasswordToEnv(password: string): void {
+    const envPath = join(process.cwd(), '.env');
+
+    try {
+      // Create or overwrite .env with password
+      writeFileSync(envPath, `# Agent Man Configuration
+
+# Your encryption password (auto-generated on first setup)
+# Keep this file secure and never commit it to version control
+CHAT_MAN_PASSWORD=${password}
+`, { mode: 0o600 }); // Set restrictive permissions (owner read/write only)
+
+      console.log('✅ Password saved to .env file (permissions: 600)');
+      console.log('   Future restarts will use this password automatically\n');
+    } catch (error) {
+      console.log('⚠️  Failed to save .env file:', error instanceof Error ? error.message : 'Unknown');
+      console.log('   You may need to manually create .env with: CHAT_MAN_PASSWORD=your-password\n');
+    }
   }
 
   /**
@@ -107,6 +141,9 @@ export class EncryptionSetupWizard {
 
       if (success) {
         console.log('✅ Encryption unlocked successfully!\n');
+
+        // Automatically save password to .env for seamless future restarts
+        this.savePasswordToEnv(password);
       } else {
         console.log('❌ Incorrect password. Cannot proceed.\n');
         process.exit(1);
@@ -147,16 +184,11 @@ export class EncryptionSetupWizard {
       }
     }
 
-    console.log('⚠️  BACKUP YOUR PASSWORD:');
-    console.log('   Write down your password and store it securely.');
-    console.log('   Consider using a password manager like 1Password, Bitwarden, or KeePass.\n');
+    // Automatically save password to .env for seamless future restarts
+    this.savePasswordToEnv(password);
 
-    const understood = await this.question('Have you securely backed up your password? (yes/no): ');
-
-    if (understood.toLowerCase() !== 'yes') {
-      console.log('\n⚠️  Please backup your password before continuing.');
-      console.log('   The application will still start, but you are responsible for password security.\n');
-    }
+    console.log('💡 TIP: Backup your password securely');
+    console.log('   Consider using a password manager like 1Password, Bitwarden, or KeePass\n');
 
     console.log('✅ Setup complete! Your data is now protected with AES-256-GCM encryption.\n');
 
