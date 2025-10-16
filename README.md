@@ -24,6 +24,50 @@ Then open: **http://localhost:3010**
 **Platforms:** macOS, Linux, WSL
 **Requirements:** [Bun](https://bun.sh) • [Ollama](https://ollama.ai) (auto-installed if missing)
 
+### 🔧 Troubleshooting
+
+**Windows: "command not found: ./start.sh"**
+
+You're trying to run on **native Windows** instead of WSL. This app requires WSL (Windows Subsystem for Linux):
+
+```powershell
+# Install WSL (PowerShell as Administrator)
+wsl --install
+
+# Restart your computer, then open Ubuntu and run:
+cd /mnt/c/path/to/chat-man
+bun install
+bun start
+```
+
+**Native Windows is NOT supported.** Use WSL, macOS, or Linux.
+
+**Advanced: Native Windows (not recommended)**
+
+If you must use native Windows without WSL:
+
+```powershell
+# 1. Install Ollama from https://ollama.ai/download/windows
+# 2. Start Ollama manually (should auto-start in system tray)
+# 3. Run the server directly:
+bun run dev:server
+```
+
+Note: You'll miss automatic Ollama startup and health checks.
+
+**Linux: Permission denied**
+
+If you downloaded a ZIP file instead of cloning with git:
+
+```bash
+# Fix permissions and line endings
+chmod +x start.sh start-dev.sh
+sed -i 's/\r$//' start.sh start-dev.sh
+bun start
+```
+
+**Alternative:** Always use `git clone` instead of downloading ZIP files.
+
 ---
 
 ## ✨ Features
