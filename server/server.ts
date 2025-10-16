@@ -1731,12 +1731,8 @@ function handleStopGeneration(data: StopGenerationMessage) {
     logger.warn('Or install it: https://ollama.ai');
   } else {
     logger.info('Ollama is running');
-    try {
-      const defaultModel = await getDefaultModel();
-      logger.info('Using model', { model: defaultModel });
-    } catch (_error) {
-      logger.warn('No models found. Install one with: ollama pull llama3.2');
-    }
+    const defaultModel = await getDefaultModel();
+    logger.info('Using model', { model: defaultModel });
   }
 })();
 

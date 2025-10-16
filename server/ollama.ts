@@ -121,7 +121,8 @@ export async function getDefaultModel(): Promise<string> {
     const { models } = await listModels();
 
     if (models.length === 0) {
-      throw new Error('No Ollama models found. Run setup: bun run setup');
+      console.log('ℹ️  No models installed yet - you can download one from the UI');
+      return 'llama3.2:3b'; // Return recommended model for UI to prompt download
     }
 
     // Priority order: best for tool calling + accessibility (8GB RAM+)
