@@ -1,9 +1,10 @@
 /**
  * Document processing for multiple file types
  */
-import * as pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse/node';
 import mammoth from 'mammoth';
 import { readFile } from 'fs/promises';
+import scribe from 'scribe.js-ocr';
 import type { ProcessedDocument } from './types';
 
 export async function processDocument(
@@ -16,10 +17,12 @@ export async function processDocument(
   let pageCount: number | undefined;
 
   switch (extension) {
-    case 'pdf':
-      text = await processPDF(filePath);
-      pageCount = await getPDFPageCount(filePath);
+    case 'pdf': {
+      const pdfResult = await processPDF(filePath);
+      text = pdfResult.text;
+      pageCount = pdfResult.pageCount;
       break;
+    }
 
     case 'docx':
       text = await processDOCX(filePath);
@@ -53,25 +56,46 @@ export async function processDocument(
   };
 }
 
-interface PDFParseResult {
-  text: string;
-  numpages: number;
-}
-
-interface PDFParseModule {
-  default: (buffer: Buffer) => Promise<PDFParseResult>;
-}
-
-async function processPDF(filePath: string): Promise<string> {
+async function processPDF(filePath: string): Promise<{ text: string; pageCount: number }> {
   const dataBuffer = await readFile(filePath);
-  const data = await (pdfParse as unknown as PDFParseModule).default(dataBuffer);
-  return data.text;
-}
+  const pdf = new PDFParse({ data: dataBuffer });
 
-async function getPDFPageCount(filePath: string): Promise<number> {
-  const dataBuffer = await readFile(filePath);
-  const data = await (pdfParse as unknown as PDFParseModule).default(dataBuffer);
-  return data.numpages;
+  try {
+    const textResult = await pdf.getText();
+    const info = await pdf.getInfo();
+
+    // Concatenate all page texts
+    const fullText = textResult.pages.map(page => page.text).join('\n\n');
+
+    // Check if PDF has meaningful text (digital PDF vs scanned)
+    // If text is too short, it's likely a scanned PDF
+    if (fullText.trim().length < 50) {
+      console.log('PDF appears to be scanned (minimal text found), attempting OCR...');
+
+      try {
+        const ocrText = await scribe.extractText([filePath]);
+        await scribe.terminate(); // Clean up scribe resources
+
+        if (ocrText && ocrText.trim().length > 0) {
+          console.log(`OCR successful: extracted ${ocrText.length} characters`);
+          return {
+            text: ocrText,
+            pageCount: info.total
+          };
+        }
+      } catch (ocrError) {
+        console.error('OCR failed:', ocrError);
+        // Fall through to return the minimal text we got from pdf-parse
+      }
+    }
+
+    return {
+      text: fullText,
+      pageCount: info.total
+    };
+  } finally {
+    await pdf.destroy();
+  }
 }
 
 async function processDOCX(filePath: string): Promise<string> {
