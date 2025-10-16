@@ -24,7 +24,7 @@
     "dev": "vite",
     "dev:server": "bun run server/server.ts",
     "dev:full": "./start-dev.sh",
-    "start": "bun run server/server.ts",
+    "start": "./start.sh",
     "build": "vite build",
     "build:server": "bun build server/server.ts --outdir dist-server --target bun",
     "build:production": "bun run build && bun run build:standalone",
