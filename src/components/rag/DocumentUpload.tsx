@@ -58,7 +58,7 @@ export function DocumentUpload({ onUploadSuccess }: { onUploadSuccess?: () => vo
         ref={fileInputRef}
         type="file"
         onChange={handleFileSelect}
-        accept=".pdf,.docx,.txt,.md,.html"
+        accept=".pdf,.docx,.txt,.md,.html,.png,.jpg,.jpeg,.gif,.bmp,.webp"
         className="hidden"
         disabled={uploading}
       />
@@ -79,7 +79,7 @@ export function DocumentUpload({ onUploadSuccess }: { onUploadSuccess?: () => vo
             {uploading ? progress : 'Upload Document'}
           </div>
           <div className="text-sm text-gray-400">
-            Supports PDF, DOCX, TXT, MD, HTML
+            Supports PDF, DOCX, TXT, MD, HTML, Images (PNG, JPG, GIF, BMP, WEBP)
           </div>
         </div>
       </button>

@@ -215,7 +215,7 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
                 ref={fileInputRef}
                 type="file"
                 onChange={handleInputChange}
-                accept=".pdf,.docx,.txt,.md,.html"
+                accept=".pdf,.docx,.txt,.md,.html,.png,.jpg,.jpeg,.gif,.bmp,.webp"
                 className="hidden"
                 disabled={uploading}
               />
@@ -237,7 +237,7 @@ export function RAGModal({ isOpen, onClose }: RAGModalProps) {
                     {uploading ? 'Processing...' : 'Upload Document'}
                   </div>
                   <div className="text-sm text-gray-400">
-                    Click or drag files here (PDF, DOCX, TXT, MD, HTML)
+                    Click or drag files here (PDF, DOCX, TXT, MD, HTML, Images)
                   </div>
                 </div>
               </button>

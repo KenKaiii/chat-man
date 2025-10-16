@@ -37,6 +37,15 @@ export async function processDocument(
       text = await processHTML(filePath);
       break;
 
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+    case 'bmp':
+    case 'webp':
+      text = await processImage(filePath);
+      break;
+
     default:
       throw new Error(`Unsupported file type: ${extension}`);
   }
@@ -112,6 +121,26 @@ async function processHTML(filePath: string): Promise<string> {
   const html = await readFile(filePath, 'utf-8');
   // Simple HTML tag removal
   return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+}
+
+async function processImage(filePath: string): Promise<string> {
+  console.log('Processing image with OCR...');
+
+  try {
+    const ocrText = await scribe.extractText([filePath]);
+    await scribe.terminate(); // Clean up scribe resources
+
+    if (ocrText && ocrText.trim().length > 0) {
+      console.log(`OCR successful: extracted ${ocrText.length} characters from image`);
+      return ocrText;
+    } else {
+      console.log('OCR completed but no text found in image');
+      return '';
+    }
+  } catch (error) {
+    console.error('Image OCR failed:', error);
+    throw new Error('Failed to process image: OCR extraction failed');
+  }
 }
 
 function cleanText(text: string): string {
