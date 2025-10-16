@@ -2,6 +2,11 @@
 
 # Agent Man - Development Server (Frontend + Backend)
 
+# Load .env file if it exists
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
 PIDFILE=".dev-pids"
 rm -f "$PIDFILE"
 

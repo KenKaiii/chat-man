@@ -2,6 +2,11 @@
 
 # Agent Man - Production Startup Script
 
+# Load .env file if it exists
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
 # Check if Ollama is installed
 if ! command -v ollama &> /dev/null; then
     echo "Installing Ollama..."
