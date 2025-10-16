@@ -14,10 +14,6 @@ git clone https://github.com/KenKaiii/chat-man.git
 cd chat-man
 bun install
 
-# Setup your password
-cp .env.example .env
-# Edit .env and set your password
-
 # Build and start
 bun run build
 bun start
@@ -26,7 +22,7 @@ bun start
 Then open: **http://localhost:3010**
 
 **Platforms:** macOS, Linux, WSL
-**Requirements:** [Bun](https://bun.sh) • [Ollama](https://ollama.ai)
+**Requirements:** [Bun](https://bun.sh) • [Ollama](https://ollama.ai) (auto-installed if missing)
 
 ---
 

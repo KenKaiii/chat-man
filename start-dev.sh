@@ -31,11 +31,6 @@ if ! command -v ollama &> /dev/null; then
     exit 1
 fi
 
-# Set default password if not set
-if [ -z "$CHAT_MAN_PASSWORD" ]; then
-    export CHAT_MAN_PASSWORD="TestPassword123!"
-fi
-
 # Start Ollama
 if ! pgrep -x "ollama" > /dev/null; then
     ollama serve > /dev/null 2>&1 &

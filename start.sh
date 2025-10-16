@@ -19,14 +19,6 @@ if ! command -v ollama &> /dev/null; then
     fi
 fi
 
-# Check if password is set
-if [ -z "$CHAT_MAN_PASSWORD" ]; then
-    echo "Error: CHAT_MAN_PASSWORD not set"
-    echo "Run: cp .env.example .env"
-    echo "Then edit .env and set your password"
-    exit 1
-fi
-
 # Start Ollama if not running
 if ! pgrep -x "ollama" > /dev/null; then
     ollama serve > /dev/null 2>&1 &
