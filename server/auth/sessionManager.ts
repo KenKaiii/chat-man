@@ -6,6 +6,7 @@
  */
 
 import * as jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 import { getKeyManager } from '../encryption/keyManager';
 import { logger } from '../utils/secureLogger';
 
