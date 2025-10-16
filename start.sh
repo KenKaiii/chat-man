@@ -19,9 +19,23 @@ echo ""
 
 # Check if Ollama is installed
 if ! command -v ollama &> /dev/null; then
-    echo -e "${RED}❌ Ollama is not installed${NC}"
-    echo -e "${YELLOW}   Install from: https://ollama.ai${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠️  Ollama is not installed${NC}"
+    echo -e "${BLUE}   Installing Ollama automatically...${NC}"
+    echo ""
+
+    # Auto-install Ollama
+    if curl -fsSL https://ollama.ai/install.sh | sh; then
+        echo ""
+        echo -e "${GREEN}✓ Ollama installed successfully${NC}"
+
+        # Add to PATH for current session
+        export PATH="$HOME/.ollama/bin:/usr/local/bin:$PATH"
+    else
+        echo -e "${RED}❌ Failed to install Ollama${NC}"
+        echo -e "${YELLOW}   Please install manually from: https://ollama.ai${NC}"
+        exit 1
+    fi
+    echo ""
 fi
 
 # Check if password is set (from .env file)
