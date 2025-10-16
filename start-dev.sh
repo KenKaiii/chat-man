@@ -28,8 +28,18 @@ trap cleanup SIGINT SIGTERM EXIT
 
 # Check Ollama
 if ! command -v ollama &> /dev/null; then
-    echo "Error: Ollama not installed"
-    echo "Install from: https://ollama.ai"
+    echo "Error: Ollama is not installed"
+    echo ""
+
+    # Detect OS and provide platform-specific instructions
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "macOS: Download from https://ollama.ai/download/mac"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "Linux: curl -fsSL https://ollama.ai/install.sh | sh"
+    else
+        echo "Download from: https://ollama.ai"
+    fi
+
     exit 1
 fi
 

@@ -11,12 +11,46 @@ fi
 
 # Check if Ollama is installed
 if ! command -v ollama &> /dev/null; then
-    echo "Installing Ollama..."
-    if curl -fsSL https://ollama.ai/install.sh | sh; then
-        export PATH="$HOME/.ollama/bin:/usr/local/bin:$PATH"
+    echo "Error: Ollama is not installed"
+    echo ""
+
+    # Detect OS and provide platform-specific instructions
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        echo "macOS Installation:"
+        echo "1. Download Ollama.app from: https://ollama.ai/download/mac"
+        echo "2. Open the downloaded .app file"
+        echo "3. Ollama will install and run in the menu bar"
+        echo "4. Then run 'bun start' again"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux - offer to auto-install
+        echo "Linux Installation:"
+        echo "Run this command to install:"
+        echo "  curl -fsSL https://ollama.ai/install.sh | sh"
+        echo ""
+        read -p "Auto-install now? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if curl -fsSL https://ollama.ai/install.sh | sh; then
+                export PATH="$HOME/.ollama/bin:/usr/local/bin:$PATH"
+                echo "✅ Ollama installed successfully"
+            else
+                echo "❌ Installation failed. Install manually from: https://ollama.ai"
+                exit 1
+            fi
+        else
+            exit 1
+        fi
     else
-        echo "Error: Failed to install Ollama"
-        echo "Install manually from: https://ollama.ai"
+        # Windows or other
+        echo "Download Ollama from: https://ollama.ai"
+        exit 1
+    fi
+
+    # Re-check if ollama is available after installation
+    if ! command -v ollama &> /dev/null; then
+        echo ""
+        echo "Please install Ollama and run 'bun start' again"
         exit 1
     fi
 fi
