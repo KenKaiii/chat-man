@@ -56,7 +56,8 @@ function addCorsHeaders(response: Response): Response {
 }
 
 // Database (initialized after encryption)
-let db: SessionDatabase;
+let db: SessionDatabase | null = null;
+let isServerReady = false;
 
 // Track active generation streams per session
 const activeGenerations = new Map<string, AbortController>();
@@ -654,9 +655,36 @@ Bun.serve({
       }
     }
 
+    // Check if server is ready (database initialized) for database-dependent endpoints
+    if (!isServerReady || !db) {
+      // Allow non-database endpoints to work during initialization
+      const nonDbEndpoints = [
+        '/api/auth/',
+        '/api/health',
+        '/api/models',
+        '/api/settings',
+        '/api/user-config',
+        '/api/compliance/status',
+        '/api/audit/',
+        '/api/rag/',
+        '/api/reload-config',
+        '/api/dsr/',
+        '/api/security/',
+        '/api/metrics',
+      ];
+
+      const isNonDbEndpoint = nonDbEndpoints.some(prefix => url.pathname.startsWith(prefix));
+
+      if (!isNonDbEndpoint && url.pathname.startsWith('/api/')) {
+        return addCorsHeaders(Response.json({
+          error: 'Server is initializing, please try again in a moment'
+        }, { status: 503 }));
+      }
+    }
+
     // Session Management: Get all sessions
     if (url.pathname === '/api/sessions' && req.method === 'GET') {
-      const sessions = db.getAllSessions();
+      const sessions = db!.getAllSessions();
 
       // Audit log data access
       logAuditEvent(AuditEventType.DATA_ACCESS, 'SUCCESS', {
@@ -670,7 +698,7 @@ Bun.serve({
     // Session Management: Create new session
     if (url.pathname === '/api/sessions' && req.method === 'POST') {
       const body = await req.json() as { mode?: 'general' | 'rag' | 'spark' | 'voice' };
-      const session = db.createSession(body.mode);
+      const session = db!.createSession(body.mode);
 
       // Audit log session creation
       logAuditEvent(AuditEventType.SESSION_CREATE, 'SUCCESS', {
@@ -684,7 +712,7 @@ Bun.serve({
     // Session Management: Get specific session
     if (url.pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === 'GET') {
       const id = url.pathname.split('/').pop()!;
-      const session = db.getSession(id);
+      const session = db!.getSession(id);
       if (!session) {
         return addCorsHeaders(Response.json({ error: 'Session not found' }, { status: 404 }));
       }
@@ -701,7 +729,7 @@ Bun.serve({
     // Session Management: Get session messages
     if (url.pathname.match(/^\/api\/sessions\/[^/]+\/messages$/) && req.method === 'GET') {
       const id = url.pathname.split('/')[3];
-      const messages = db.getMessages(id);
+      const messages = db!.getMessages(id);
 
       // Audit log data access
       logAuditEvent(AuditEventType.DATA_ACCESS, 'SUCCESS', {
@@ -717,7 +745,7 @@ Bun.serve({
     if (url.pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === 'PATCH') {
       const id = url.pathname.split('/').pop()!;
       const body = await req.json() as { title: string };
-      db.updateSessionTitle(id, body.title);
+      db!.updateSessionTitle(id, body.title);
 
       // Audit log data modification
       logAuditEvent(AuditEventType.DATA_MODIFY, 'SUCCESS', {
@@ -731,7 +759,7 @@ Bun.serve({
     // Session Management: Delete session
     if (url.pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === 'DELETE') {
       const id = url.pathname.split('/').pop()!;
-      db.deleteSession(id);
+      db!.deleteSession(id);
 
       // Audit log session deletion
       logAuditEvent(AuditEventType.SESSION_DELETE, 'SUCCESS', {
@@ -743,7 +771,7 @@ Bun.serve({
 
     // Data Management: Export all data (GDPR Right to Data Portability)
     if (url.pathname === '/api/data/export' && req.method === 'GET') {
-      const exportData = db.exportAllData();
+      const exportData = db!.exportAllData();
 
       // Audit log
       logAuditEvent(AuditEventType.DATA_EXPORT, 'SUCCESS', {
@@ -769,7 +797,7 @@ Bun.serve({
       // Audit log before deletion
       logAuditEvent(AuditEventType.DATA_DELETE_ALL, 'SUCCESS');
 
-      db.deleteAllData();
+      db!.deleteAllData();
       return addCorsHeaders(Response.json({
         success: true,
         message: 'All user data has been permanently deleted',
@@ -782,7 +810,7 @@ Bun.serve({
         const settings = await loadSettings();
         const retentionEnabled = settings.retention?.enabled || false;
         const retentionDays = settings.retention?.maxSessionAgeDays || 90;
-        const expiredSessions = retentionEnabled ? db.getExpiredSessions(retentionDays) : [];
+        const expiredSessions = retentionEnabled ? db!.getExpiredSessions(retentionDays) : [];
 
         return addCorsHeaders(Response.json({
           enabled: retentionEnabled,
@@ -811,7 +839,7 @@ Bun.serve({
         }
 
         const retentionDays = settings.retention.maxSessionAgeDays;
-        const deletedCount = db.deleteExpiredSessions(retentionDays);
+        const deletedCount = db!.deleteExpiredSessions(retentionDays);
 
         // Audit log
         logAuditEvent(AuditEventType.RETENTION_CLEANUP, 'SUCCESS', { deletedCount, retentionDays });
@@ -1215,6 +1243,16 @@ async function handleChatMessage(ws: ServerWebSocket, data: ChatMessage) {
     return;
   }
 
+  // Check if database is ready
+  if (!db) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Server is initializing, please try again in a moment',
+      sessionId,
+    }));
+    return;
+  }
+
   // Log incoming message (NEVER log content - HIPAA/GDPR)
   logger.info('Received chat message', {
     mode: data.mode,
@@ -1558,6 +1596,10 @@ function handleStopGeneration(data: StopGenerationMessage) {
   try {
     db = new SessionDatabase();
     logger.info('Database initialized');
+
+    // Server is now ready to accept requests
+    isServerReady = true;
+    logger.info('Server is ready');
   } catch (error) {
     logger.error('Failed to initialize database', {
       error: error instanceof Error ? error.message : 'Unknown',
@@ -1574,6 +1616,10 @@ function handleStopGeneration(data: StopGenerationMessage) {
 
       // Run cleanup function
       const runCleanup = () => {
+        if (!db) {
+          logger.warn('Cannot run retention cleanup - database not initialized');
+          return;
+        }
         logger.info('Running retention cleanup', { retentionDays });
         const deletedCount = db.deleteExpiredSessions(retentionDays);
         if (deletedCount > 0) {
