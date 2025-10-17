@@ -78,6 +78,29 @@ else
     fi
 fi
 
+# Download embedding model if not present (required for RAG)
+echo ""
+echo "Checking for embedding model (required for RAG)..."
+if ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
+    echo "✅ Embedding model (nomic-embed-text) already installed"
+else
+    echo "⬇️  Downloading nomic-embed-text model (274MB, required for document uploads)..."
+    echo "This is a one-time download and may take a few minutes..."
+    if ollama pull nomic-embed-text 2>&1; then
+        echo "✅ Embedding model downloaded successfully"
+    else
+        echo ""
+        echo "⚠️  Warning: Failed to download embedding model"
+        echo "RAG/document upload functionality may not work."
+        echo "You can install it manually later with:"
+        echo "  ollama pull nomic-embed-text"
+        echo ""
+        echo "Continuing with server startup..."
+        sleep 2
+    fi
+fi
+
 # Start the server
-echo "Agent Man running at http://localhost:3010"
+echo ""
+echo "🚀 Agent Man running at http://localhost:3010"
 exec bun run server/server.ts
