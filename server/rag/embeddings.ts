@@ -20,7 +20,27 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   });
 
   if (!response.ok) {
-    throw new Error(`Ollama embeddings failed: ${response.statusText}`);
+    // Try to get detailed error message from response
+    let errorDetails = response.statusText;
+    try {
+      const errorBody = await response.text();
+      if (errorBody) {
+        errorDetails = errorBody;
+      }
+    } catch (_e) {
+      // Ignore parse errors
+    }
+
+    // Check if it's a model not found error
+    if (response.status === 404 || errorDetails.includes('model') || errorDetails.includes('not found')) {
+      throw new Error(
+        `Embedding model '${EMBEDDING_MODEL}' not found. ` +
+        `Please ensure Ollama is running and the model is installed. ` +
+        `Run: ollama pull ${EMBEDDING_MODEL}`
+      );
+    }
+
+    throw new Error(`Ollama embeddings failed (${response.status}): ${errorDetails}`);
   }
 
   const data: EmbeddingResponse = await response.json();

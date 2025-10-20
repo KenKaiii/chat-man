@@ -65,33 +65,78 @@ fi
 
 # Start Ollama if not running
 # Use pgrep if available, otherwise check with ps (for systems without pgrep)
+OLLAMA_STARTED=false
 if command -v pgrep > /dev/null 2>&1; then
     if ! pgrep -x "ollama" > /dev/null 2>&1; then
+        echo "Starting Ollama service..."
         ollama serve > /dev/null 2>&1 &
-        sleep 2
+        OLLAMA_STARTED=true
     fi
 else
     # Fallback for systems without pgrep (rare, but defensive)
     if ! ps aux | grep -v grep | grep -q "ollama serve"; then
+        echo "Starting Ollama service..."
         ollama serve > /dev/null 2>&1 &
-        sleep 2
+        OLLAMA_STARTED=true
+    fi
+fi
+
+# Wait for Ollama API to be ready (with timeout)
+if [ "$OLLAMA_STARTED" = true ]; then
+    echo "Waiting for Ollama API to be ready..."
+    MAX_RETRIES=15
+    RETRY_COUNT=0
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+            echo "✅ Ollama API is ready"
+            break
+        fi
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo "⚠️  Warning: Ollama API did not respond after 15 seconds"
+            echo "Continuing anyway, but RAG functionality may not work."
+            break
+        fi
+        sleep 1
+    done
+else
+    # Ollama was already running, but still verify it's responding
+    if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+        echo "⚠️  Warning: Ollama is running but API is not responding"
+        echo "Try restarting Ollama manually: killall ollama && ollama serve"
     fi
 fi
 
 # Download embedding model if not present (required for RAG)
 echo ""
 echo "Checking for embedding model (required for RAG)..."
-if ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
+if ollama list 2>&1 | grep -q "nomic-embed-text"; then
     echo "✅ Embedding model (nomic-embed-text) already installed"
 else
     echo "⬇️  Downloading nomic-embed-text model (274MB, required for document uploads)..."
     echo "This is a one-time download and may take a few minutes..."
-    if ollama pull nomic-embed-text 2>&1; then
-        echo "✅ Embedding model downloaded successfully"
+
+    # Try to pull the model and capture output
+    if PULL_OUTPUT=$(ollama pull nomic-embed-text 2>&1); then
+        # Verify the model actually downloaded by checking ollama list again
+        if ollama list 2>&1 | grep -q "nomic-embed-text"; then
+            echo "✅ Embedding model downloaded successfully"
+        else
+            echo ""
+            echo "⚠️  Warning: Download appeared to succeed but model not found"
+            echo "This may indicate a problem with Ollama."
+            echo "Try manually: ollama pull nomic-embed-text"
+            echo ""
+            echo "Continuing with server startup..."
+            sleep 2
+        fi
     else
         echo ""
         echo "⚠️  Warning: Failed to download embedding model"
-        echo "RAG/document upload functionality may not work."
+        echo "Error output:"
+        echo "$PULL_OUTPUT"
+        echo ""
+        echo "RAG/document upload functionality will NOT work."
         echo "You can install it manually later with:"
         echo "  ollama pull nomic-embed-text"
         echo ""
