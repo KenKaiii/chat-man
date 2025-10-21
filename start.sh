@@ -121,6 +121,18 @@ else
         # Verify the model actually downloaded by checking ollama list again
         if ollama list 2>&1 | grep -q "nomic-embed-text"; then
             echo "✅ Embedding model downloaded successfully"
+
+            # Warm up the model to prevent cold-start failures on first upload
+            echo "⏳ Warming up embedding model (initializing worker process)..."
+            if curl -s http://localhost:11434/api/embeddings \
+                -H "Content-Type: application/json" \
+                -d '{"model":"nomic-embed-text","prompt":"initialization test"}' \
+                --max-time 30 > /dev/null 2>&1; then
+                echo "✅ Embedding model ready for use"
+            else
+                echo "⚠️  Model warm-up timed out (will retry on first use)"
+                echo "This is normal on slower systems."
+            fi
         else
             echo ""
             echo "⚠️  Warning: Download appeared to succeed but model not found"
