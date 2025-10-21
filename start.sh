@@ -2,6 +2,12 @@
 
 # Agent Man - Production Startup Script
 
+# Immediate output to confirm script is running
+echo "========================================="
+echo "  Agent Man - Starting up..."
+echo "========================================="
+echo ""
+
 # Load .env file if it exists (cross-platform compatible)
 if [ -f .env ]; then
     set -a
