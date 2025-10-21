@@ -61,6 +61,10 @@ if ! command -v ollama &> /dev/null; then
         echo "Please install Ollama and run 'bun start' again"
         exit 1
     fi
+
+    # Fresh installation - give Ollama extra time to initialize
+    echo "Fresh Ollama installation detected - allowing initialization time..."
+    sleep 3
 fi
 
 # Start Ollama if not running
@@ -84,7 +88,7 @@ fi
 # Wait for Ollama API to be ready (with timeout)
 if [ "$OLLAMA_STARTED" = true ]; then
     echo "Waiting for Ollama API to be ready..."
-    MAX_RETRIES=15
+    MAX_RETRIES=30  # Increased from 15 for fresh installations
     RETRY_COUNT=0
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
@@ -93,17 +97,30 @@ if [ "$OLLAMA_STARTED" = true ]; then
         fi
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-            echo "⚠️  Warning: Ollama API did not respond after 15 seconds"
-            echo "Continuing anyway, but RAG functionality may not work."
-            break
+            echo ""
+            echo "❌ ERROR: Ollama API did not respond after 30 seconds"
+            echo ""
+            echo "Troubleshooting:"
+            echo "1. Check if Ollama is running: ps aux | grep ollama"
+            echo "2. Try manually: killall ollama && ollama serve"
+            echo "3. Check logs for errors"
+            echo ""
+            echo "Cannot continue without Ollama. Exiting..."
+            exit 1
         fi
         sleep 1
     done
 else
     # Ollama was already running, but still verify it's responding
+    echo "Verifying Ollama API..."
     if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
         echo "⚠️  Warning: Ollama is running but API is not responding"
         echo "Try restarting Ollama manually: killall ollama && ollama serve"
+        echo ""
+        echo "Attempting to continue, but uploads may fail..."
+        sleep 2
+    else
+        echo "✅ Ollama API is responding"
     fi
 fi
 
@@ -122,6 +139,10 @@ else
         if ollama list 2>&1 | grep -q "nomic-embed-text"; then
             echo "✅ Embedding model downloaded successfully"
 
+            # Give model time to fully register after download
+            echo "Allowing model to fully initialize..."
+            sleep 2
+
             # Warm up the model to prevent cold-start failures on first upload
             echo "⏳ Warming up embedding model (initializing worker process)..."
 
@@ -131,7 +152,7 @@ else
                 if WARMUP_OUTPUT=$(curl -s http://localhost:11434/api/embeddings \
                     -H "Content-Type: application/json" \
                     -d '{"model":"nomic-embed-text","prompt":"initialization test"}' \
-                    --max-time 30 2>&1); then
+                    --max-time 45 2>&1); then
 
                     # Verify response contains "embedding" field (not an error)
                     if echo "$WARMUP_OUTPUT" | grep -q '"embedding"'; then
@@ -139,12 +160,18 @@ else
                         WARMUP_SUCCESS=true
                         break
                     else
-                        echo "⚠️  Warm-up attempt $i failed: Invalid response"
-                        [ $i -lt 3 ] && sleep 2
+                        echo "⚠️  Warm-up attempt $i/3 failed: Invalid response"
+                        if [ $i -lt 3 ]; then
+                            echo "   Retrying in 3 seconds..."
+                            sleep 3
+                        fi
                     fi
                 else
-                    echo "⚠️  Warm-up attempt $i failed (timeout or connection error)"
-                    [ $i -lt 3 ] && sleep 2
+                    echo "⚠️  Warm-up attempt $i/3 failed (timeout or connection error)"
+                    if [ $i -lt 3 ]; then
+                        echo "   Retrying in 3 seconds..."
+                        sleep 3
+                    fi
                 fi
             done
 
