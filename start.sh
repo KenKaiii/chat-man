@@ -169,8 +169,10 @@ fi
 # Download embedding model if not present (required for RAG)
 echo ""
 echo "Checking for embedding model (required for RAG)..."
+MODEL_INSTALLED=false
 if ollama list 2>&1 | grep -q "nomic-embed-text"; then
     echo "✅ Embedding model (nomic-embed-text) already installed"
+    MODEL_INSTALLED=true
 else
     echo "⬇️  Downloading nomic-embed-text model (274MB, required for document uploads)..."
     echo "This is a one-time download and may take a few minutes..."
@@ -267,6 +269,31 @@ else
         echo ""
         echo "Continuing with server startup..."
         sleep 2
+    fi
+fi
+
+# ALWAYS test embeddings - even if model was already installed
+# This catches corrupted models that pass the "ollama list" check
+if [ "$MODEL_INSTALLED" = true ]; then
+    echo ""
+    echo "⏳ Testing embedding generation..."
+
+    if TEST_OUTPUT=$(curl -s http://localhost:11434/api/embeddings \
+        -H "Content-Type: application/json" \
+        -d '{"model":"nomic-embed-text","prompt":"test"}' \
+        --max-time 10 2>&1); then
+
+        if echo "$TEST_OUTPUT" | grep -q '"embedding":\[' && echo "$TEST_OUTPUT" | grep -qE '[0-9]+\.[0-9]+'; then
+            echo "✅ Embeddings working correctly"
+        else
+            echo "❌ Embedding test failed - model may be corrupted"
+            echo "🔧 Auto-fixing: Re-downloading model..."
+            ollama rm nomic-embed-text 2>/dev/null
+            ollama pull nomic-embed-text
+            echo "✅ Model re-downloaded"
+        fi
+    else
+        echo "⚠️  Could not test embeddings (Ollama may still be starting)"
     fi
 fi
 
