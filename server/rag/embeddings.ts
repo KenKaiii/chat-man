@@ -5,7 +5,7 @@ import type { EmbeddingResponse } from './types';
 import { logger } from '../utils/secureLogger';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const EMBEDDING_MODEL = 'nomic-embed-text';
+const EMBEDDING_MODEL = 'all-minilm'; // Switched from nomic-embed-text (274MB->45MB, faster download, no stuck downloads)
 const MAX_RETRIES = 3; // Increased for Linux worker spawn issues
 const RETRY_DELAY_MS = 3000; // 3 seconds - Linux needs more time for worker spawn
 

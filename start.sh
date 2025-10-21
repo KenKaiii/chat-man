@@ -167,21 +167,29 @@ else
     echo "⚠️  Could not determine Ollama version"
 fi
 
+# Fix: Ollama requires SSH key for model downloads (missing on fresh installs)
+if [ ! -f ~/.ollama/id_ed25519 ]; then
+    echo "Creating Ollama SSH key (required for model downloads)..."
+    mkdir -p ~/.ollama
+    ssh-keygen -t ed25519 -f ~/.ollama/id_ed25519 -N "" > /dev/null 2>&1
+    echo "✅ SSH key created"
+fi
+
 # Download embedding model if not present (required for RAG)
 echo ""
 echo "Checking for embedding model (required for RAG)..."
 MODEL_INSTALLED=false
-if ollama list 2>&1 | grep -q "nomic-embed-text"; then
-    echo "✅ Embedding model (nomic-embed-text) already installed"
+if ollama list 2>&1 | grep -q "all-minilm"; then
+    echo "✅ Embedding model (all-minilm) already installed"
     MODEL_INSTALLED=true
 else
-    echo "⬇️  Downloading nomic-embed-text model (274MB, required for document uploads)..."
-    echo "This is a one-time download and may take a few minutes..."
+    echo "⬇️  Downloading all-minilm model (45MB, required for document uploads)..."
+    echo "This is a one-time download and should complete in seconds..."
 
     # Try to pull the model and capture output
-    if PULL_OUTPUT=$(ollama pull nomic-embed-text 2>&1); then
+    if PULL_OUTPUT=$(ollama pull all-minilm 2>&1); then
         # Verify the model actually downloaded by checking ollama list again
-        if ollama list 2>&1 | grep -q "nomic-embed-text"; then
+        if ollama list 2>&1 | grep -q "all-minilm"; then
             echo "✅ Embedding model downloaded successfully"
 
             # Give model time to fully register after download
@@ -196,7 +204,7 @@ else
             for i in 1 2 3; do
                 if TEST_OUTPUT=$(curl -s http://localhost:11434/api/embeddings \
                     -H "Content-Type: application/json" \
-                    -d '{"model":"nomic-embed-text","prompt":"test"}' \
+                    -d '{"model":"all-minilm","prompt":"test"}' \
                     --max-time 45 2>&1); then
 
                     # Verify response contains "embedding" field AND validate it's an array
@@ -242,9 +250,9 @@ else
                 echo "1. Check if Ollama is running: curl http://localhost:11434/api/tags"
                 echo "2. Manually test embeddings: curl -X POST http://localhost:11434/api/embeddings \\"
                 echo "      -H 'Content-Type: application/json' \\"
-                echo "      -d '{\"model\":\"nomic-embed-text\",\"prompt\":\"test\"}'"
+                echo "      -d '{\"model\":\"all-minilm\",\"prompt\":\"test\"}'"
                 echo "3. Try restarting Ollama: killall ollama && ollama serve"
-                echo "4. Re-download model: ollama rm nomic-embed-text && ollama pull nomic-embed-text"
+                echo "4. Re-download model: ollama rm all-minilm && ollama pull all-minilm"
                 echo ""
                 echo "Press Enter to continue anyway (uploads WILL fail)..."
                 read -r
@@ -266,7 +274,7 @@ else
         echo ""
         echo "RAG/document upload functionality will NOT work."
         echo "You can install it manually later with:"
-        echo "  ollama pull nomic-embed-text"
+        echo "  ollama pull all-minilm"
         echo ""
         echo "Continuing with server startup..."
         sleep 2
@@ -281,7 +289,7 @@ if [ "$MODEL_INSTALLED" = true ]; then
 
     if TEST_OUTPUT=$(curl -s http://localhost:11434/api/embeddings \
         -H "Content-Type: application/json" \
-        -d '{"model":"nomic-embed-text","prompt":"test"}' \
+        -d '{"model":"all-minilm","prompt":"test"}' \
         --max-time 10 2>&1); then
 
         if echo "$TEST_OUTPUT" | grep -q '"embedding":\[' && echo "$TEST_OUTPUT" | grep -qE '[0-9]+\.[0-9]+'; then
@@ -289,8 +297,8 @@ if [ "$MODEL_INSTALLED" = true ]; then
         else
             echo "❌ Embedding test failed - model may be corrupted"
             echo "🔧 Auto-fixing: Re-downloading model..."
-            ollama rm nomic-embed-text 2>/dev/null
-            ollama pull nomic-embed-text
+            ollama rm all-minilm 2>/dev/null
+            ollama pull all-minilm
             echo "✅ Model re-downloaded"
         fi
     else
