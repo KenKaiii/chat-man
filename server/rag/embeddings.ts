@@ -6,8 +6,8 @@ import { logger } from '../utils/secureLogger';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const EMBEDDING_MODEL = 'nomic-embed-text';
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 2000; // 2 seconds
+const MAX_RETRIES = 3; // Increased for Linux worker spawn issues
+const RETRY_DELAY_MS = 3000; // 3 seconds - Linux needs more time for worker spawn
 
 /**
  * Helper to sleep for a given number of milliseconds
@@ -63,15 +63,22 @@ export async function generateEmbedding(text: string): Promise<number[]> {
           );
         }
 
-        // Check if it's a runner process crash (Ollama internal failure)
+        // Check if it's a runner process crash (Ollama internal failure - DON'T RETRY)
         if (errorDetails.includes('runner process no longer running') || errorDetails.includes('llama runner process')) {
+          logger.error('Ollama runner process crashed - this requires manual intervention', {
+            error: errorDetails,
+            attempt: attempt + 1,
+            platform: process.platform,
+            arch: process.arch,
+          });
           throw new Error(
-            `Ollama embedding worker process crashed. This usually indicates:\n` +
-            `1. Corrupted model - Try: ollama rm ${EMBEDDING_MODEL} && ollama pull ${EMBEDDING_MODEL}\n` +
-            `2. Insufficient memory - Ollama needs ~2GB free RAM\n` +
-            `3. Conflicting Ollama instances - Try: killall ollama && ollama serve\n` +
-            `4. Outdated Ollama version - Update from https://ollama.ai\n` +
-            `Error: ${errorDetails}`
+            `Ollama embedding worker crashed on ${process.platform}/${process.arch}.\n\n` +
+            `CRITICAL FIX - Try these in order:\n` +
+            `1. RESTART OLLAMA: killall ollama && ollama serve\n` +
+            `2. RE-DOWNLOAD MODEL: ollama rm ${EMBEDDING_MODEL} && ollama pull ${EMBEDDING_MODEL}\n` +
+            `3. UPDATE OLLAMA: Visit https://ollama.ai (need v0.4.0+)\n` +
+            `4. CHECK RESOURCES: Needs ~2GB RAM free\n\n` +
+            `Error detail: ${errorDetails}`
           );
         }
 
