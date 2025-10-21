@@ -72,21 +72,30 @@ if ! command -v ollama &> /dev/null; then
 fi
 
 # Start Ollama if not running
-# Use pgrep if available, otherwise check with ps (for systems without pgrep)
+# Check if Ollama is already running
 OLLAMA_STARTED=false
 if command -v pgrep > /dev/null 2>&1; then
-    if ! pgrep -x "ollama" > /dev/null 2>&1; then
+    OLLAMA_RUNNING=$(pgrep -x "ollama" > /dev/null 2>&1 && echo "true" || echo "false")
+else
+    OLLAMA_RUNNING=$(ps aux | grep -v grep | grep -q "ollama serve" && echo "true" || echo "false")
+fi
+
+if [ "$OLLAMA_RUNNING" = "false" ]; then
+    echo "Ollama is not running. Starting it..."
+
+    # On macOS, prefer launching the app if it exists
+    if [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Ollama.app" ]; then
+        echo "Launching Ollama.app..."
+        open -a Ollama
+        OLLAMA_STARTED=true
+    else
+        # Fallback to ollama serve (Linux or if app not found)
         echo "Starting Ollama service..."
         ollama serve > /dev/null 2>&1 &
         OLLAMA_STARTED=true
     fi
 else
-    # Fallback for systems without pgrep (rare, but defensive)
-    if ! ps aux | grep -v grep | grep -q "ollama serve"; then
-        echo "Starting Ollama service..."
-        ollama serve > /dev/null 2>&1 &
-        OLLAMA_STARTED=true
-    fi
+    echo "Ollama is already running"
 fi
 
 # Wait for Ollama API to be ready (with timeout)
@@ -106,7 +115,12 @@ if [ "$OLLAMA_STARTED" = true ]; then
             echo ""
             echo "Troubleshooting:"
             echo "1. Check if Ollama is running: ps aux | grep ollama"
-            echo "2. Try manually: killall ollama && ollama serve"
+            if [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Ollama.app" ]; then
+                echo "2. Launch Ollama.app from Applications folder (or Spotlight)"
+                echo "3. Or restart it: killall ollama && open -a Ollama"
+            else
+                echo "2. Try manually: killall ollama && ollama serve"
+            fi
             echo "3. Check logs for errors"
             echo ""
             echo "Cannot continue without Ollama. Exiting..."
@@ -119,7 +133,11 @@ else
     echo "Verifying Ollama API..."
     if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
         echo "⚠️  Warning: Ollama is running but API is not responding"
-        echo "Try restarting Ollama manually: killall ollama && ollama serve"
+        if [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Ollama.app" ]; then
+            echo "Try restarting: killall ollama && open -a Ollama"
+        else
+            echo "Try restarting: killall ollama && ollama serve"
+        fi
         echo ""
         echo "Attempting to continue, but uploads may fail..."
         sleep 2
