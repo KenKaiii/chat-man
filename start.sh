@@ -152,11 +152,12 @@ echo "Checking Ollama version..."
 if OLLAMA_VERSION=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1); then
     echo "Ollama version: $OLLAMA_VERSION"
 
-    # Extract major/minor version (e.g., 0.5 from 0.5.2)
-    MAJOR_MINOR=$(echo "$OLLAMA_VERSION" | cut -d. -f1-2)
+    # Parse version as integer for comparison (0.12.6 -> 1206)
+    VERSION_NUM=$(echo "$OLLAMA_VERSION" | awk -F. '{printf "%d%02d%02d", $1, $2, $3}')
+    MIN_VERSION=400  # 0.4.0
 
     # Warn if version is older than 0.4 (when embeddings API stabilized)
-    if [ "$(echo "$MAJOR_MINOR" | awk '{print ($1 < 0.4)}')" -eq 1 ]; then
+    if [ "$VERSION_NUM" -lt "$MIN_VERSION" ]; then
         echo "⚠️  WARNING: Ollama version $OLLAMA_VERSION is outdated"
         echo "Embeddings may not work correctly. Recommended: 0.4.0+"
         echo "Update from: https://ollama.ai"
