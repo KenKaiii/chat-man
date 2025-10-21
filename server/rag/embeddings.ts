@@ -63,6 +63,18 @@ export async function generateEmbedding(text: string): Promise<number[]> {
           );
         }
 
+        // Check if it's a runner process crash (Ollama internal failure)
+        if (errorDetails.includes('runner process no longer running') || errorDetails.includes('llama runner process')) {
+          throw new Error(
+            `Ollama embedding worker process crashed. This usually indicates:\n` +
+            `1. Corrupted model - Try: ollama rm ${EMBEDDING_MODEL} && ollama pull ${EMBEDDING_MODEL}\n` +
+            `2. Insufficient memory - Ollama needs ~2GB free RAM\n` +
+            `3. Conflicting Ollama instances - Try: killall ollama && ollama serve\n` +
+            `4. Outdated Ollama version - Update from https://ollama.ai\n` +
+            `Error: ${errorDetails}`
+          );
+        }
+
         // Check if it's a cold-start error (retry these)
         if (isColdStartError(errorDetails) && attempt < MAX_RETRIES) {
           logger.warn('Embedding cold-start detected, retrying...', {

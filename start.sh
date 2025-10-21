@@ -130,6 +130,26 @@ else
     fi
 fi
 
+# Check Ollama version (warn if too old)
+echo ""
+echo "Checking Ollama version..."
+if OLLAMA_VERSION=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1); then
+    echo "Ollama version: $OLLAMA_VERSION"
+
+    # Extract major/minor version (e.g., 0.5 from 0.5.2)
+    MAJOR_MINOR=$(echo "$OLLAMA_VERSION" | cut -d. -f1-2)
+
+    # Warn if version is older than 0.4 (when embeddings API stabilized)
+    if [ "$(echo "$MAJOR_MINOR" | awk '{print ($1 < 0.4)}')" -eq 1 ]; then
+        echo "⚠️  WARNING: Ollama version $OLLAMA_VERSION is outdated"
+        echo "Embeddings may not work correctly. Recommended: 0.4.0+"
+        echo "Update from: https://ollama.ai"
+        echo ""
+    fi
+else
+    echo "⚠️  Could not determine Ollama version"
+fi
+
 # Download embedding model if not present (required for RAG)
 echo ""
 echo "Checking for embedding model (required for RAG)..."
