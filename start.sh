@@ -22,29 +22,27 @@ if ! command -v ollama &> /dev/null; then
 
     # Detect OS and provide platform-specific instructions
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS - try homebrew first
-        if command -v brew &> /dev/null; then
-            echo "macOS: Installing Ollama via Homebrew..."
-            if brew install ollama; then
-                echo "✅ Ollama installed successfully"
-            else
-                echo "❌ Homebrew installation failed"
-                echo "Manual install: Download from https://ollama.ai/download/mac"
-                exit 1
-            fi
-        else
-            echo "macOS Installation:"
-            echo "Option 1 (Recommended): Install with Homebrew"
-            echo "  brew install ollama"
-            echo ""
-            echo "Option 2: Manual Download"
-            echo "  1. Download Ollama.app from: https://ollama.ai/download/mac"
-            echo "  2. Open the downloaded .app file"
-            echo "  3. Ollama will run in the menu bar"
-            echo ""
-            echo "Then run 'bun start' again"
-            exit 1
-        fi
+        # macOS - MUST use official .app (can be installed via brew cask OR .dmg)
+        echo ""
+        echo "macOS: Ollama installation required"
+        echo ""
+        echo "Installation options:"
+        echo ""
+        echo "Option 1 (Easiest): Homebrew Cask"
+        echo "  brew install --cask ollama"
+        echo "  open -a Ollama  # Launch the app"
+        echo ""
+        echo "Option 2: Manual Download"
+        echo "  1. Download from: https://ollama.com/download/Ollama.dmg"
+        echo "  2. Open the .dmg and drag Ollama.app to Applications"
+        echo "  3. Launch Ollama.app from Applications"
+        echo ""
+        echo "⚠️  Do NOT use 'brew install ollama' (formula version)"
+        echo "    Must use 'brew install --cask ollama' (app version)"
+        echo ""
+        echo "Then run 'bun start' again"
+        echo ""
+        exit 1
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
         # Linux - auto-install
         echo "Linux: Installing Ollama..."
