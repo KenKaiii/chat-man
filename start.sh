@@ -143,31 +143,43 @@ else
             echo "Allowing model to fully initialize..."
             sleep 2
 
-            # Warm up the model to prevent cold-start failures on first upload
-            echo "⏳ Warming up embedding model (initializing worker process)..."
+            # Test the model to confirm it actually works (not just warm-up)
+            echo "⏳ Testing embedding model (confirming functionality)..."
 
-            # Try warm-up with retries (critical for preventing EOF errors)
-            WARMUP_SUCCESS=false
+            # Try functional test with retries (critical for preventing EOF errors)
+            TEST_SUCCESS=false
             for i in 1 2 3; do
-                if WARMUP_OUTPUT=$(curl -s http://localhost:11434/api/embeddings \
+                if TEST_OUTPUT=$(curl -s http://localhost:11434/api/embeddings \
                     -H "Content-Type: application/json" \
-                    -d '{"model":"nomic-embed-text","prompt":"initialization test"}' \
+                    -d '{"model":"nomic-embed-text","prompt":"test"}' \
                     --max-time 45 2>&1); then
 
-                    # Verify response contains "embedding" field (not an error)
-                    if echo "$WARMUP_OUTPUT" | grep -q '"embedding"'; then
-                        echo "✅ Embedding model ready for use"
-                        WARMUP_SUCCESS=true
-                        break
+                    # Verify response contains "embedding" field AND validate it's an array
+                    if echo "$TEST_OUTPUT" | grep -q '"embedding":\['; then
+                        # Extract first few values to verify it's actual numbers
+                        EMBEDDING_SAMPLE=$(echo "$TEST_OUTPUT" | grep -o '"embedding":\[[^]]*' | head -c 100)
+
+                        # Check if we got numeric values (basic sanity check)
+                        if echo "$EMBEDDING_SAMPLE" | grep -qE '[0-9]+\.[0-9]+'; then
+                            echo "✅ Embedding model test PASSED - generating valid embeddings"
+                            TEST_SUCCESS=true
+                            break
+                        else
+                            echo "⚠️  Test attempt $i/3 failed: Response missing numeric embeddings"
+                            if [ $i -lt 3 ]; then
+                                echo "   Retrying in 3 seconds..."
+                                sleep 3
+                            fi
+                        fi
                     else
-                        echo "⚠️  Warm-up attempt $i/3 failed: Invalid response"
+                        echo "⚠️  Test attempt $i/3 failed: Invalid response (no embedding array)"
                         if [ $i -lt 3 ]; then
                             echo "   Retrying in 3 seconds..."
                             sleep 3
                         fi
                     fi
                 else
-                    echo "⚠️  Warm-up attempt $i/3 failed (timeout or connection error)"
+                    echo "⚠️  Test attempt $i/3 failed (timeout or connection error)"
                     if [ $i -lt 3 ]; then
                         echo "   Retrying in 3 seconds..."
                         sleep 3
@@ -175,17 +187,21 @@ else
                 fi
             done
 
-            if [ "$WARMUP_SUCCESS" = false ]; then
+            if [ "$TEST_SUCCESS" = false ]; then
                 echo ""
-                echo "❌ ERROR: Embedding model failed to initialize after 3 attempts"
+                echo "❌ ERROR: Embedding model test FAILED after 3 attempts"
+                echo "The model is not generating valid embeddings."
                 echo "This will cause 'EOF' errors when uploading documents."
                 echo ""
                 echo "Troubleshooting:"
                 echo "1. Check if Ollama is running: curl http://localhost:11434/api/tags"
-                echo "2. Manually test embeddings: ollama pull nomic-embed-text"
+                echo "2. Manually test embeddings: curl -X POST http://localhost:11434/api/embeddings \\"
+                echo "      -H 'Content-Type: application/json' \\"
+                echo "      -d '{\"model\":\"nomic-embed-text\",\"prompt\":\"test\"}'"
                 echo "3. Try restarting Ollama: killall ollama && ollama serve"
+                echo "4. Re-download model: ollama rm nomic-embed-text && ollama pull nomic-embed-text"
                 echo ""
-                echo "Press Enter to continue anyway (uploads will likely fail)..."
+                echo "Press Enter to continue anyway (uploads WILL fail)..."
                 read -r
             fi
         else
