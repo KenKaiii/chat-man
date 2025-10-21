@@ -29,7 +29,7 @@ class RAGDatabase {
       // Table doesn't exist, create it
       const sampleData: VectorDocument[] = [{
         id: 'init',
-        vector: Array(768).fill(0), // nomic-embed-text is 768-dim
+        vector: Array(384).fill(0), // all-minilm is 384-dim (switched from nomic-embed-text 768-dim for faster downloads)
         text: 'Initialization document',
         metadata: {
           documentId: 'init',
@@ -40,7 +40,7 @@ class RAGDatabase {
       }];
 
       this.table = await this.connection!.createTable('documents', sampleData);
-      logger.info('Created new documents table');
+      logger.info('Created new documents table with 384-dim vectors');
     }
 
     return this.table;

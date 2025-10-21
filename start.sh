@@ -306,6 +306,16 @@ if [ "$MODEL_INSTALLED" = true ]; then
     fi
 fi
 
+# Clean old vector database if using incompatible embeddings
+# (Users upgrading from nomic-embed-text 768-dim to all-minilm 384-dim)
+if [ -d "data/rag-vectors" ]; then
+    echo ""
+    echo "⚠️  Detected existing RAG database - checking compatibility..."
+    echo "If you experience RAG errors, the old database may be incompatible."
+    echo "To fix: rm -rf data/rag-vectors && restart"
+    echo ""
+fi
+
 # Start the server
 echo ""
 echo "🚀 Agent Man running at http://localhost:3010"
