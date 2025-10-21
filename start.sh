@@ -124,14 +124,42 @@ else
 
             # Warm up the model to prevent cold-start failures on first upload
             echo "⏳ Warming up embedding model (initializing worker process)..."
-            if curl -s http://localhost:11434/api/embeddings \
-                -H "Content-Type: application/json" \
-                -d '{"model":"nomic-embed-text","prompt":"initialization test"}' \
-                --max-time 30 > /dev/null 2>&1; then
-                echo "✅ Embedding model ready for use"
-            else
-                echo "⚠️  Model warm-up timed out (will retry on first use)"
-                echo "This is normal on slower systems."
+
+            # Try warm-up with retries (critical for preventing EOF errors)
+            WARMUP_SUCCESS=false
+            for i in 1 2 3; do
+                if WARMUP_OUTPUT=$(curl -s http://localhost:11434/api/embeddings \
+                    -H "Content-Type: application/json" \
+                    -d '{"model":"nomic-embed-text","prompt":"initialization test"}' \
+                    --max-time 30 2>&1); then
+
+                    # Verify response contains "embedding" field (not an error)
+                    if echo "$WARMUP_OUTPUT" | grep -q '"embedding"'; then
+                        echo "✅ Embedding model ready for use"
+                        WARMUP_SUCCESS=true
+                        break
+                    else
+                        echo "⚠️  Warm-up attempt $i failed: Invalid response"
+                        [ $i -lt 3 ] && sleep 2
+                    fi
+                else
+                    echo "⚠️  Warm-up attempt $i failed (timeout or connection error)"
+                    [ $i -lt 3 ] && sleep 2
+                fi
+            done
+
+            if [ "$WARMUP_SUCCESS" = false ]; then
+                echo ""
+                echo "❌ ERROR: Embedding model failed to initialize after 3 attempts"
+                echo "This will cause 'EOF' errors when uploading documents."
+                echo ""
+                echo "Troubleshooting:"
+                echo "1. Check if Ollama is running: curl http://localhost:11434/api/tags"
+                echo "2. Manually test embeddings: ollama pull nomic-embed-text"
+                echo "3. Try restarting Ollama: killall ollama && ollama serve"
+                echo ""
+                echo "Press Enter to continue anyway (uploads will likely fail)..."
+                read -r
             fi
         else
             echo ""

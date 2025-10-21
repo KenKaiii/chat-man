@@ -1608,6 +1608,20 @@ function handleStopGeneration(data: StopGenerationMessage) {
     process.exit(1);
   }
 
+  // Warm up embedding model (prevents EOF errors on first upload)
+  // This is a fallback safety net in case start.sh warm-up failed or was bypassed
+  try {
+    const { generateEmbedding } = await import('./rag/embeddings');
+    logger.info('Warming up embedding model...');
+    await generateEmbedding('server initialization test');
+    logger.info('Embedding model ready');
+  } catch (error) {
+    logger.warn('Failed to warm up embedding model', {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+    logger.warn('Document uploads may experience initial delays or errors');
+  }
+
   // Set up data retention policy (GDPR Article 5.1.e - Storage Limitation)
   try {
     const settings = await loadSettings();
