@@ -26,6 +26,11 @@ function isColdStartError(errorDetails: string): boolean {
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
+  // Truncate text to be safe (all-minilm has 256 token context)
+  // Rough approximation: 4 chars per token, so 256 tokens = ~1000 chars max
+  const MAX_CHARS = 800; // Conservative limit
+  const truncatedText = text.length > MAX_CHARS ? text.substring(0, MAX_CHARS) : text;
+
   let lastError: Error | null = null;
 
   // Retry loop for cold-start failures
@@ -38,7 +43,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         },
         body: JSON.stringify({
           model: EMBEDDING_MODEL,
-          prompt: text,
+          prompt: truncatedText,
         }),
       });
 

@@ -68,7 +68,7 @@ class RAGDatabase {
     const table = await this.ensureTable();
 
     // Get all documents
-    const allResults = await table.search(Array(768).fill(0)).limit(10000).execute();
+    const allResults = await table.search(Array(384).fill(0)).limit(10000).execute();
 
     interface RowWithDistance {
       _distance: number;
@@ -99,7 +99,7 @@ class RAGDatabase {
       // No chunks left, create empty table with init document
       const sampleData: VectorDocument[] = [{
         id: 'init',
-        vector: Array(768).fill(0),
+        vector: Array(384).fill(0),
         text: 'Initialization document',
         metadata: {
           documentId: 'init',
@@ -117,7 +117,7 @@ class RAGDatabase {
   async listDocuments(): Promise<string[]> {
     const table = await this.ensureTable();
     // Get all vectors (limit to a reasonable number)
-    const results = await table.search(Array(768).fill(0)).limit(1000).execute();
+    const results = await table.search(Array(384).fill(0)).limit(1000).execute();
 
     interface RowWithMetadata {
       metadata?: { documentId: string };
@@ -140,7 +140,7 @@ class RAGDatabase {
   }> {
     const table = await this.ensureTable();
     // Get all documents and filter in JavaScript (LanceDB filter syntax is complex for metadata)
-    const allResults = await table.search(Array(768).fill(0)).limit(1000).execute();
+    const allResults = await table.search(Array(384).fill(0)).limit(1000).execute();
 
     interface RowWithTextAndMetadata {
       text: string;

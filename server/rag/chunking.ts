@@ -4,7 +4,7 @@
 import type { ChunkOptions, Chunk } from './types';
 
 export const DEFAULT_CHUNK_OPTIONS: ChunkOptions = {
-  chunkSize: 512,
+  chunkSize: 100, // Ultra-safe for all-minilm (256 token ctx, 100 words = ~75 tokens max)
   overlapPercent: 15,
   respectBoundaries: true,
 };
