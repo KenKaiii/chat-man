@@ -4,6 +4,9 @@ A HIPAA/GDPR/CCPA-compliant AI chat application with local Ollama integration.
 
 **Chat with AI models running entirely on your machine. Your data never leaves your computer.**
 
+> [!TIP]
+> **Want to build your own apps with AI?** A free 7-day build challenge and 20+ step-by-step projects are in my free community: **[skool.com/raid](https://www.skool.com/raid)**
+
 ---
 
 ## 🚀 Quick Start
